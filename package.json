@@ -1,0 +1,1 @@
+{"name": "bootstrap-monorepo", "private": true, "workspaces": ["apps/*", "packages/*"]}
