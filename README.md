@@ -1,0 +1,1 @@
+# WhatsApp Message Forwarding (Cloud API)\n\nThis repository contains an example of how to use the Cloud API for forwarding WhatsApp messages.
