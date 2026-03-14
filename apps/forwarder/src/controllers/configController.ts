@@ -1,8 +1,9 @@
 import { Request, Response } from 'express';
+import { getPersistedForwardToNumber, persistForwardToNumber } from '../db/configStore';
 import logger from '../services/loggerService';
 
-// In-memory store for the forward-to number (loaded from env on startup)
-let currentForwardToNumber: string = process.env['FORWARD_TO_NUMBER'] ?? '';
+// Load from DB on startup (falls back to env if not set in DB)
+let currentForwardToNumber: string = getPersistedForwardToNumber();
 
 /**
  * Returns the current forward-to number (for internal use by other services).
@@ -51,6 +52,7 @@ export function updateForwardToNumber(req: Request, res: Response): void {
 
   const previous = currentForwardToNumber;
   currentForwardToNumber = cleaned;
+  persistForwardToNumber(cleaned);
 
   logger.info(`✅ Forward-to number updated: ****${previous.slice(-4)} → ****${cleaned.slice(-4)}`);
 

@@ -12,3 +12,4 @@ services:
     restart: unless-stopped
     volumes:
       - ./apps/forwarder/logs:/app/logs
+      - ./data:/app/data    # SQLite database persistence

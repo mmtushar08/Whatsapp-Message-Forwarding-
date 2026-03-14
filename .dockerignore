@@ -8,3 +8,5 @@ logs
 **/logs/*.log
 .git
 *.md
+data/
+**/data/*.db
