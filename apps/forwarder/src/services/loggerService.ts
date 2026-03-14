@@ -25,7 +25,7 @@ const logger = winston.createLogger({
     }),
     // File transport — writes structured JSON logs
     new winston.transports.File({
-      filename: path.resolve(__dirname, '../../../logs/app.log'),
+      filename: path.resolve(process.cwd(), 'logs/app.log'),
       format: combine(
         timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
         errors({ stack: true }),
