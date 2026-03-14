@@ -159,7 +159,7 @@ paths:
       description: |
         Updates the phone number that messages are forwarded to at runtime.
         Requires a valid admin token matching the ADMIN_TOKEN environment variable.
-        Changes take effect immediately without server restart.
+        Changes take effect immediately without server restart and are persisted to SQLite.
       operationId: updateForwardNumber
       requestBody:
         required: true

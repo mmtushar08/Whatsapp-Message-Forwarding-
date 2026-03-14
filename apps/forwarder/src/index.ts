@@ -7,6 +7,9 @@ import docsRouter from './routes/docs';
 import messagesRouter from './routes/messages';
 import webhookRouter from './routes/webhook';
 
+// Initialize database on startup
+initDatabase();
+
 const app = express();
 
 // Parse incoming JSON bodies and capture raw bytes for webhook signature verification
@@ -47,6 +50,7 @@ if (require.main === module) {
     logger.info(`🚀 WhatsApp Forwarder started on port ${config.port}`);
     logger.info(`📡 Webhook URL: http://localhost:${config.port}/webhook`);
     logger.info(`🔧 Config API: http://localhost:${config.port}/config/forward-number`);
+    logger.info(`📊 Messages API: http://localhost:${config.port}/messages`);
     logger.info(`📖 API Docs: http://localhost:${config.port}/docs`);
     logger.info(`📊 Messages API: http://localhost:${config.port}/messages`);
     logger.info(

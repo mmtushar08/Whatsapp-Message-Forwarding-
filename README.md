@@ -140,17 +140,15 @@ apps/
       config/
         index.ts                  # Loads and exports env config
       db/
-        database.ts               # SQLite initialization (WAL mode, auto-creates tables)
-        configStore.ts            # Persistent key-value config (forward-to number)
-        messageStore.ts           # Message log insert, query, count, stats
+        database.ts               # SQLite init (better-sqlite3)
+        configStore.ts            # Persistent config (forward-to number)
+        messageStore.ts           # Message history CRUD
       routes/
         webhook.ts                # Webhook routes (GET verify + POST receive)
-        config.ts                 # Config routes (update forward number)
         messages.ts               # Message history routes
       controllers/
         webhookController.ts      # Handles incoming webhook events
-        configController.ts       # Handles config update requests
-        messagesController.ts     # Handles message history requests
+        messagesController.ts     # GET /messages and /messages/stats
       services/
         whatsappService.ts        # Calls WhatsApp Cloud API to forward messages
         filterService.ts          # Keyword/filter logic
