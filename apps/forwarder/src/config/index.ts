@@ -44,6 +44,9 @@ const config = {
 
   /** Winston log level */
   logLevel: process.env['LOG_LEVEL'] ?? 'info',
+
+  /** WhatsApp App Secret (for webhook signature verification) — optional but recommended */
+  appSecret: process.env['WHATSAPP_APP_SECRET'] ?? '',
 };
 
 export default config;

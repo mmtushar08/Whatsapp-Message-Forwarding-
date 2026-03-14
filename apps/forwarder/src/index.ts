@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request } from 'express';
 import config from './config';
 import logger from './services/loggerService';
 import configRouter from './routes/config';
@@ -6,8 +6,14 @@ import webhookRouter from './routes/webhook';
 
 const app = express();
 
-// Parse incoming JSON bodies
-app.use(express.json());
+// Parse incoming JSON bodies and capture raw bytes for webhook signature verification
+app.use(
+  express.json({
+    verify: (req: Request, _res, buf) => {
+      req.rawBody = buf;
+    },
+  }),
+);
 
 // Health check endpoint
 app.get('/health', (_req, res) => {
@@ -25,16 +31,18 @@ app.use((_req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
-// Start the server
-app.listen(config.port, () => {
-  logger.info(`🚀 WhatsApp Forwarder started on port ${config.port}`);
-  logger.info(`📡 Webhook URL: http://localhost:${config.port}/webhook`);
-  logger.info(`🔧 Config API: http://localhost:${config.port}/config/forward-number`);
-  logger.info(
-    config.keywordFilters.length > 0
-      ? `🔍 Keyword filters active: [${config.keywordFilters.join(', ')}]`
-      : '🔍 No keyword filters — forwarding ALL messages',
-  );
-});
+// Start the server only when run directly (not imported in tests)
+if (require.main === module) {
+  app.listen(config.port, () => {
+    logger.info(`🚀 WhatsApp Forwarder started on port ${config.port}`);
+    logger.info(`📡 Webhook URL: http://localhost:${config.port}/webhook`);
+    logger.info(`🔧 Config API: http://localhost:${config.port}/config/forward-number`);
+    logger.info(
+      config.keywordFilters.length > 0
+        ? `🔍 Keyword filters active: [${config.keywordFilters.join(', ')}]`
+        : '🔍 No keyword filters — forwarding ALL messages',
+    );
+  });
+}
 
 export default app;
