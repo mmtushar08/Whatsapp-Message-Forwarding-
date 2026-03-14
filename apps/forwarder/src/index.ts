@@ -2,6 +2,7 @@ import express, { Request } from 'express';
 import config from './config';
 import logger from './services/loggerService';
 import configRouter from './routes/config';
+import docsRouter from './routes/docs';
 import webhookRouter from './routes/webhook';
 
 const app = express();
@@ -26,6 +27,9 @@ app.use('/webhook', webhookRouter);
 // Config routes (phone number update, etc.)
 app.use('/config', configRouter);
 
+// API docs (Swagger UI)
+app.use('/docs', docsRouter);
+
 // 404 handler
 app.use((_req, res) => {
   res.status(404).json({ error: 'Not found' });
@@ -37,6 +41,7 @@ if (require.main === module) {
     logger.info(`🚀 WhatsApp Forwarder started on port ${config.port}`);
     logger.info(`📡 Webhook URL: http://localhost:${config.port}/webhook`);
     logger.info(`🔧 Config API: http://localhost:${config.port}/config/forward-number`);
+    logger.info(`📖 API Docs: http://localhost:${config.port}/docs`);
     logger.info(
       config.keywordFilters.length > 0
         ? `🔍 Keyword filters active: [${config.keywordFilters.join(', ')}]`
