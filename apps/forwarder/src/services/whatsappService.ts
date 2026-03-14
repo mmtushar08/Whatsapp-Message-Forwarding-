@@ -1,5 +1,6 @@
 import axios, { AxiosError } from 'axios';
 import config from '../config';
+import { getForwardToNumber } from '../controllers/configController';
 import { SendMessagePayload, SendMessageResponse } from '../types/whatsapp';
 import logger from './loggerService';
 
@@ -17,18 +18,20 @@ export async function forwardMessage(
   from: string,
   originalText: string,
 ): Promise<SendMessageResponse> {
+  // Always use the latest phone number (supports runtime updates)
+  const forwardTo = getForwardToNumber() || config.forwardToNumber;
   const url = `${GRAPH_API_URL}/${config.whatsappPhoneNumberId}/messages`;
 
   const payload: SendMessagePayload = {
     messaging_product: 'whatsapp',
-    to: config.forwardToNumber,
+    to: forwardTo,
     type: 'text',
     text: {
       body: `Forwarded from ${from}:\n\n${originalText}`,
     },
   };
 
-  logger.info(`Forwarding message from ${from} to ${config.forwardToNumber}`);
+  logger.info(`Forwarding message from ${from} to ${forwardTo}`);
 
   try {
     const response = await axios.post<SendMessageResponse>(url, payload, {
