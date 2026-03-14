@@ -1,0 +1,14 @@
+version: '3.8'
+services:
+  forwarder:
+    build:
+      context: .
+      dockerfile: apps/forwarder/Dockerfile
+    container_name: whatsapp-forwarder
+    ports:
+      - "3000:3000"
+    env_file:
+      - apps/forwarder/.env
+    restart: unless-stopped
+    volumes:
+      - ./apps/forwarder/logs:/app/logs

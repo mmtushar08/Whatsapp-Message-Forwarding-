@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    name: Lint, Type-check & Test
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Type-check
+        working-directory: apps/forwarder
+        run: npm run type-check
+
+      - name: Lint
+        working-directory: apps/forwarder
+        run: npm run lint
+
+      - name: Run tests
+        working-directory: apps/forwarder
+        run: npm test
+        env:
+          WHATSAPP_ACCESS_TOKEN: test_token
+          WHATSAPP_PHONE_NUMBER_ID: '123456789'
+          FORWARD_TO_NUMBER: '9876543210'
+          WEBHOOK_VERIFY_TOKEN: test_verify_token
+          ADMIN_TOKEN: test_admin_token
+          LOG_LEVEL: silent

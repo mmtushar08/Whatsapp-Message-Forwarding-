@@ -1,5 +1,7 @@
 # WhatsApp Message Forwarding (Cloud API)
 
+[![CI](https://github.com/mmtushar08/Whatsapp-Message-Forwarding-/actions/workflows/ci.yml/badge.svg)](https://github.com/mmtushar08/Whatsapp-Message-Forwarding-/actions/workflows/ci.yml)
+
 A **production-ready WhatsApp Message Forwarding application** built with **Node.js + TypeScript + Express.js** and the **WhatsApp Cloud API (Meta)**. Automatically forwards incoming WhatsApp messages to a target number, with optional keyword-based filtering.
 
 ---
@@ -171,3 +173,93 @@ apps/
 - Never commit your `.env` file — it is in `.gitignore`
 - Log files (`logs/*.log`) are also excluded from git
 - All API credentials are loaded from environment variables only
+
+---
+
+## 🧪 Running Tests
+
+The project uses **Jest** + **ts-jest** for unit testing.
+
+```bash
+cd apps/forwarder
+
+# Run all tests once
+npm test
+
+# Run tests in watch mode
+npm run test:watch
+
+# Run tests with coverage report
+npm run test:coverage
+```
+
+Test files live under `apps/forwarder/src/__tests__/` and cover:
+
+| Test File | What it Tests |
+|-----------|--------------|
+| `filterService.test.ts` | Keyword filter logic |
+| `messageParser.test.ts` | Webhook payload parsing |
+| `configController.test.ts` | Phone number update + auth |
+| `webhookController.test.ts` | Webhook verify + receive endpoints |
+| `whatsappService.test.ts` | WhatsApp Cloud API forwarding (mocked axios) |
+| `webhookSignature.test.ts` | Signature verification middleware |
+
+---
+
+## 🐳 Docker
+
+The app ships with a multi-stage `Dockerfile` and a `docker-compose.yml` for easy deployment.
+
+### Run with Docker Compose
+
+```bash
+# 1. Create your .env file first
+cd apps/forwarder
+cp .env.example .env
+# Edit .env with your real credentials
+
+# 2. From the repo root, start the service
+docker-compose up --build -d
+
+# 3. Check logs
+docker-compose logs -f forwarder
+```
+
+### Run with plain Docker
+
+```bash
+# Build the image
+docker build -f apps/forwarder/Dockerfile -t whatsapp-forwarder .
+
+# Run the container
+docker run -d \
+  --env-file apps/forwarder/.env \
+  -p 3000:3000 \
+  --name whatsapp-forwarder \
+  whatsapp-forwarder
+```
+
+---
+
+## 🔐 Webhook Signature Verification
+
+Meta sends an `X-Hub-Signature-256` header with every webhook POST. The app verifies this signature when `WHATSAPP_APP_SECRET` is configured.
+
+### Setup
+
+Add your **App Secret** (found in Meta App Dashboard → Settings → Basic) to your `.env`:
+
+```env
+WHATSAPP_APP_SECRET=your_meta_app_secret_here
+```
+
+### Behaviour
+
+| Scenario | Result |
+|----------|--------|
+| `WHATSAPP_APP_SECRET` not set | Signature check skipped (warning logged) |
+| Header missing + secret set | `401 Missing signature header` |
+| Header invalid + secret set | `401 Invalid signature` |
+| Header valid + secret set | Request proceeds normally |
+
+> ⚠️ Setting `WHATSAPP_APP_SECRET` is **strongly recommended** for production to prevent spoofed webhook payloads.
