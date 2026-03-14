@@ -7,7 +7,7 @@ const DB_PATH = process.env['DB_PATH']
   ? path.resolve(process.cwd(), process.env['DB_PATH'])
   : path.resolve(process.cwd(), 'data/forwarder.db');
 
-let db: BetterSqlite3.Database;
+let db: BetterSqlite3.Database | undefined;
 
 /**
  * Initializes the SQLite database and creates tables if they don't exist.
@@ -15,7 +15,6 @@ let db: BetterSqlite3.Database;
  */
 export function initDatabase(): BetterSqlite3.Database {
   if (db) return db;
-
   // Ensure data directory exists
   mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
@@ -68,6 +67,6 @@ export function getDatabase(): BetterSqlite3.Database {
 export function closeDatabase(): void {
   if (db) {
     db.close();
-    db = undefined as unknown as BetterSqlite3.Database;
+    db = undefined;
   }
 }
