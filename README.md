@@ -120,7 +120,9 @@ https://abc123.ngrok.io/webhook
 | `GET` | `/health` | Health check — returns `{ status: "ok" }` |
 | `GET` | `/webhook` | Meta webhook verification handshake |
 | `POST` | `/webhook` | Receives incoming WhatsApp messages |
-| `PATCH` | `/config/forward-number` | Update forwarding number at runtime |
+| `PATCH` | `/config/forward-number` | Update forwarding number at runtime (persisted to DB) |
+| `GET` | `/messages` | Paginated message forwarding history |
+| `GET` | `/messages/stats` | Message stats (total/success/failed) |
 | `GET` | `/docs` | Swagger UI — interactive API documentation |
 | `GET` | `/docs/spec` | OpenAPI JSON spec (for Postman import) |
 
@@ -135,10 +137,16 @@ apps/
       index.ts                    # Entry point — starts Express server
       config/
         index.ts                  # Loads and exports env config
+      db/
+        database.ts               # SQLite init (better-sqlite3)
+        configStore.ts            # Persistent config (forward-to number)
+        messageStore.ts           # Message history CRUD
       routes/
         webhook.ts                # Webhook routes (GET verify + POST receive)
+        messages.ts               # Message history routes
       controllers/
         webhookController.ts      # Handles incoming webhook events
+        messagesController.ts     # GET /messages and /messages/stats
       services/
         whatsappService.ts        # Calls WhatsApp Cloud API to forward messages
         filterService.ts          # Keyword/filter logic
@@ -155,6 +163,8 @@ apps/
     .eslintrc.js
     .prettierrc
     nodemon.json
+data/
+  .gitkeep                        # Keeps data/ folder in git (*.db files are ignored)
 ```
 
 ---
@@ -206,6 +216,61 @@ Test files live under `apps/forwarder/src/__tests__/` and cover:
 | `webhookController.test.ts` | Webhook verify + receive endpoints |
 | `whatsappService.test.ts` | WhatsApp Cloud API forwarding (mocked axios) |
 | `webhookSignature.test.ts` | Signature verification middleware |
+| `messageStore.test.ts` | SQLite message log CRUD |
+| `configStore.test.ts` | SQLite persistent config store |
+| `messagesController.test.ts` | GET /messages + /messages/stats endpoints |
+
+---
+
+## 📊 Message History API
+
+All forwarded messages are persisted to a local SQLite database (`data/forwarder.db`).
+
+### Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/messages` | Paginated message history (newest first) |
+| `GET` | `/messages/stats` | Aggregate stats (total, success, failed) |
+| `PATCH` | `/config/forward-number` | Update forwarding number (persisted to DB) |
+
+### Example Responses
+
+#### `GET /messages?limit=10&offset=0`
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "from_number": "15559876543",
+      "to_number": "12345678900",
+      "message": "Hello, this is a test!",
+      "type": "text",
+      "status": "success",
+      "error": null,
+      "forwarded_at": "2026-03-14 07:30:00"
+    }
+  ],
+  "pagination": {
+    "total": 1,
+    "limit": 10,
+    "offset": 0,
+    "hasMore": false
+  }
+}
+```
+
+#### `GET /messages/stats`
+```json
+{
+  "total": 150,
+  "success": 145,
+  "failed": 5
+}
+```
+
+### Persistent Config
+The forwarding phone number (`PATCH /config/forward-number`) is now **persisted to SQLite** — it survives server restarts. On first startup, the value from `FORWARD_TO_NUMBER` in `.env` is used as the default.
 
 ---
 

@@ -1,9 +1,14 @@
 import express, { Request } from 'express';
 import config from './config';
+import { initDatabase } from './db/database';
 import logger from './services/loggerService';
 import configRouter from './routes/config';
 import docsRouter from './routes/docs';
+import messagesRouter from './routes/messages';
 import webhookRouter from './routes/webhook';
+
+// Initialize database on startup
+initDatabase();
 
 const app = express();
 
@@ -27,6 +32,9 @@ app.use('/webhook', webhookRouter);
 // Config routes (phone number update, etc.)
 app.use('/config', configRouter);
 
+// Message history routes
+app.use('/messages', messagesRouter);
+
 // API docs (Swagger UI)
 app.use('/docs', docsRouter);
 
@@ -41,6 +49,7 @@ if (require.main === module) {
     logger.info(`🚀 WhatsApp Forwarder started on port ${config.port}`);
     logger.info(`📡 Webhook URL: http://localhost:${config.port}/webhook`);
     logger.info(`🔧 Config API: http://localhost:${config.port}/config/forward-number`);
+    logger.info(`📊 Messages API: http://localhost:${config.port}/messages`);
     logger.info(`📖 API Docs: http://localhost:${config.port}/docs`);
     logger.info(
       config.keywordFilters.length > 0

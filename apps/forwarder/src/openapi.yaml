@@ -31,6 +31,8 @@ tags:
     description: WhatsApp Cloud API webhook endpoints (called by Meta)
   - name: Config
     description: Runtime configuration management
+  - name: Messages
+    description: Message forwarding history and statistics
 
 paths:
   /health:
@@ -157,7 +159,7 @@ paths:
       description: |
         Updates the phone number that messages are forwarded to at runtime.
         Requires a valid admin token matching the ADMIN_TOKEN environment variable.
-        Changes take effect immediately without server restart.
+        Changes take effect immediately without server restart and are persisted to SQLite.
       operationId: updateForwardNumber
       requestBody:
         required: true
@@ -193,6 +195,57 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+
+  /messages:
+    get:
+      tags: [Messages]
+      summary: Get message forwarding history
+      description: Returns a paginated list of all forwarded messages, newest first.
+      operationId: getMessages
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+          description: Number of records to return
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+          description: Number of records to skip
+      responses:
+        '200':
+          description: Paginated message history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MessageLog'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+
+  /messages/stats:
+    get:
+      tags: [Messages]
+      summary: Get message forwarding statistics
+      description: Returns aggregate stats - total, success, and failed message counts.
+      operationId: getMessageStats
+      responses:
+        '200':
+          description: Message statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageStats'
 
 components:
   schemas:
@@ -257,3 +310,63 @@ components:
         error:
           type: string
           example: 'Unauthorized: invalid admin token'
+
+    MessageLog:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        from_number:
+          type: string
+          example: '15559876543'
+        to_number:
+          type: string
+          example: '12345678900'
+        message:
+          type: string
+          example: 'Hello, this is a test message!'
+        type:
+          type: string
+          example: text
+        status:
+          type: string
+          enum: [success, failed]
+          example: success
+        error:
+          type: string
+          nullable: true
+          example: null
+        forwarded_at:
+          type: string
+          format: date-time
+          example: '2026-03-14 07:30:00'
+
+    Pagination:
+      type: object
+      properties:
+        total:
+          type: integer
+          example: 150
+        limit:
+          type: integer
+          example: 50
+        offset:
+          type: integer
+          example: 0
+        hasMore:
+          type: boolean
+          example: true
+
+    MessageStats:
+      type: object
+      properties:
+        total:
+          type: integer
+          example: 150
+        success:
+          type: integer
+          example: 145
+        failed:
+          type: integer
+          example: 5
