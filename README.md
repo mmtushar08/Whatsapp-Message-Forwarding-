@@ -14,6 +14,8 @@ A **production-ready WhatsApp Message Forwarding application** built with **Node
 - 📝 **Structured logging** — Winston-powered logging to console and `logs/app.log`
 - 🔐 **Secure config** — all credentials via `.env` (never hardcoded)
 - 🏗️ **Monorepo structure** — clean `apps/forwarder/` workspace
+- 💾 **Persistent storage** — SQLite DB stores forwarding number and message history (survives restarts)
+- 📊 **Message history API** — query forwarded messages and stats via REST endpoints
 
 ---
 
@@ -121,6 +123,8 @@ https://abc123.ngrok.io/webhook
 | `GET` | `/webhook` | Meta webhook verification handshake |
 | `POST` | `/webhook` | Receives incoming WhatsApp messages |
 | `PATCH` | `/config/forward-number` | Update forwarding number at runtime |
+| `GET` | `/messages` | Paginated forwarded message history |
+| `GET` | `/messages/stats` | Aggregate message statistics |
 | `GET` | `/docs` | Swagger UI — interactive API documentation |
 | `GET` | `/docs/spec` | OpenAPI JSON spec (for Postman import) |
 
@@ -135,10 +139,18 @@ apps/
       index.ts                    # Entry point — starts Express server
       config/
         index.ts                  # Loads and exports env config
+      db/
+        database.ts               # SQLite initialization (WAL mode, auto-creates tables)
+        configStore.ts            # Persistent key-value config (forward-to number)
+        messageStore.ts           # Message log insert, query, count, stats
       routes/
         webhook.ts                # Webhook routes (GET verify + POST receive)
+        config.ts                 # Config routes (update forward number)
+        messages.ts               # Message history routes
       controllers/
         webhookController.ts      # Handles incoming webhook events
+        configController.ts       # Handles config update requests
+        messagesController.ts     # Handles message history requests
       services/
         whatsappService.ts        # Calls WhatsApp Cloud API to forward messages
         filterService.ts          # Keyword/filter logic
@@ -147,14 +159,15 @@ apps/
         whatsapp.ts               # TypeScript types for WhatsApp API payloads
       utils/
         messageParser.ts          # Parses incoming webhook payload
+        retry.ts                  # Exponential backoff retry utility
     logs/
       .gitkeep                    # Keeps logs/ folder in git (log files are ignored)
     .env.example                  # Example environment variables (no real secrets)
     package.json
     tsconfig.json
-    .eslintrc.js
-    .prettierrc
-    nodemon.json
+data/
+  .gitkeep                        # Keeps data/ folder in git (DB files are ignored)
+  forwarder.db                    # SQLite database (auto-created at runtime, not in git)
 ```
 
 ---
@@ -206,6 +219,58 @@ Test files live under `apps/forwarder/src/__tests__/` and cover:
 | `webhookController.test.ts` | Webhook verify + receive endpoints |
 | `whatsappService.test.ts` | WhatsApp Cloud API forwarding (mocked axios) |
 | `webhookSignature.test.ts` | Signature verification middleware |
+| `messageStore.test.ts` | SQLite insert, query, count, and stats |
+| `messagesController.test.ts` | Message history API endpoints |
+
+---
+
+## 📊 Message History API
+
+Every forwarded message is stored in a local **SQLite database** (`data/forwarder.db`), which also persists the current forwarding number across server restarts.
+
+### Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/messages` | Paginated message history, newest first |
+| `GET` | `/messages/stats` | Aggregate totals: total, success, failed |
+
+### Example: `GET /messages?limit=10&offset=0`
+
+```json
+{
+  "data": [
+    {
+      "id": 42,
+      "from_number": "15559876543",
+      "to_number": "12345678900",
+      "message": "Hello!",
+      "type": "text",
+      "status": "success",
+      "error": null,
+      "forwarded_at": "2026-03-14T07:30:00.000Z"
+    }
+  ],
+  "pagination": {
+    "total": 42,
+    "limit": 10,
+    "offset": 0,
+    "hasMore": true
+  }
+}
+```
+
+### Example: `GET /messages/stats`
+
+```json
+{
+  "total": 150,
+  "success": 145,
+  "failed": 5
+}
+```
+
+> **Note:** The forwarding number set via `PATCH /config/forward-number` is now persisted to SQLite and survives server restarts. On first startup it falls back to the `FORWARD_TO_NUMBER` environment variable.
 
 ---
 

@@ -31,6 +31,8 @@ tags:
     description: WhatsApp Cloud API webhook endpoints (called by Meta)
   - name: Config
     description: Runtime configuration management
+  - name: Messages
+    description: Forwarded message history and statistics
 
 paths:
   /health:
@@ -194,6 +196,92 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /messages:
+    get:
+      tags: [Messages]
+      summary: Get paginated message history
+      description: Returns a paginated list of forwarded messages, newest first.
+      operationId: getMessages
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+          description: Maximum number of records to return
+          example: 50
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: Number of records to skip
+          example: 0
+      responses:
+        '200':
+          description: Paginated message logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MessageLog'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+              example:
+                data:
+                  - id: 42
+                    from_number: '15559876543'
+                    to_number: '12345678900'
+                    message: 'Hello!'
+                    type: text
+                    status: success
+                    error: null
+                    forwarded_at: '2026-03-14T07:30:00.000Z'
+                pagination:
+                  total: 42
+                  limit: 50
+                  offset: 0
+                  hasMore: false
+        '429':
+          description: Too many requests (rate limited)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /messages/stats:
+    get:
+      tags: [Messages]
+      summary: Get message statistics
+      description: Returns aggregate counts of total, successful, and failed forwarded messages.
+      operationId: getMessageStats
+      responses:
+        '200':
+          description: Message statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageStats'
+              example:
+                total: 150
+                success: 145
+                failed: 5
+        '429':
+          description: Too many requests (rate limited)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
   schemas:
     WebhookPayload:
@@ -257,3 +345,63 @@ components:
         error:
           type: string
           example: 'Unauthorized: invalid admin token'
+
+    MessageLog:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 42
+        from_number:
+          type: string
+          example: '15559876543'
+        to_number:
+          type: string
+          example: '12345678900'
+        message:
+          type: string
+          example: 'Hello!'
+        type:
+          type: string
+          example: 'text'
+        status:
+          type: string
+          enum: [success, failed]
+          example: 'success'
+        error:
+          type: string
+          nullable: true
+          example: null
+        forwarded_at:
+          type: string
+          format: date-time
+          example: '2026-03-14T07:30:00.000Z'
+
+    Pagination:
+      type: object
+      properties:
+        total:
+          type: integer
+          example: 150
+        limit:
+          type: integer
+          example: 50
+        offset:
+          type: integer
+          example: 0
+        hasMore:
+          type: boolean
+          example: true
+
+    MessageStats:
+      type: object
+      properties:
+        total:
+          type: integer
+          example: 150
+        success:
+          type: integer
+          example: 145
+        failed:
+          type: integer
+          example: 5
