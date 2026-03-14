@@ -47,6 +47,18 @@ const config = {
 
   /** WhatsApp App Secret (for webhook signature verification) — optional but recommended */
   appSecret: process.env['WHATSAPP_APP_SECRET'] ?? '',
+
+  /** Comma-separated list of phone numbers to forward messages to */
+  forwardToNumbers: (process.env['FORWARD_TO_NUMBERS'] ?? '')
+    .split(',')
+    .map((n) => n.trim())
+    .filter((n) => n.length > 0),
+
+  /** Max retry attempts for WhatsApp API calls */
+  maxRetryAttempts: parseInt(process.env['MAX_RETRY_ATTEMPTS'] ?? '3', 10),
+
+  /** Base delay in ms for retry backoff */
+  retryBaseDelayMs: parseInt(process.env['RETRY_BASE_DELAY_MS'] ?? '1000', 10),
 };
 
 export default config;

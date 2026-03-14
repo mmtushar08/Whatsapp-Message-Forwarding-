@@ -1,10 +1,12 @@
 import { Request, Response } from 'express';
 import config from '../config';
+import { getForwardToNumber } from '../controllers/configController';
 import { passesFilter } from '../services/filterService';
 import logger from '../services/loggerService';
-import { forwardMessage } from '../services/whatsappService';
+import { forwardToMultiple } from '../services/whatsappService';
 import { WebhookPayload } from '../types/whatsapp';
 import { extractMessages } from '../utils/messageParser';
+import { maskPhoneNumber } from '@whatsapp-forwarder/shared';
 
 /**
  * Handles Meta's webhook verification handshake (GET /webhook).
@@ -85,12 +87,21 @@ export async function receiveWebhook(req: Request, res: Response): Promise<void>
       continue;
     }
 
-    // Forward the message
+    // Forward the message to one or more recipients
     try {
-      await forwardMessage(message.from, message.text);
-      logger.info(
-        `✅ Message forwarded successfully | From: ${senderLabel} | To: ${config.forwardToNumber}`,
-      );
+      const recipients =
+        config.forwardToNumbers.length > 0
+          ? config.forwardToNumbers
+          : [getForwardToNumber() || config.forwardToNumber];
+
+      const results = await forwardToMultiple(message.from, message.text, recipients);
+      results.forEach(({ to, success, error }) => {
+        if (success) {
+          logger.info(`✅ Forwarded to ${maskPhoneNumber(to)}`);
+        } else {
+          logger.error(`❌ Failed to forward to ${maskPhoneNumber(to)}: ${error}`);
+        }
+      });
     } catch (error) {
       logger.error(`❌ Failed to forward message from ${senderLabel}: ${(error as Error).message}`);
     }

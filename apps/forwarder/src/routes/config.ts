@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { updateForwardToNumber } from '../controllers/configController';
+import { configRateLimiter } from '../middleware/rateLimiter';
 
 const router = Router();
 
@@ -8,6 +9,6 @@ const router = Router();
  * Updates the phone number to forward messages to.
  * Body: { "phoneNumber": "12345678900", "adminToken": "your_admin_token" }
  */
-router.patch('/forward-number', updateForwardToNumber);
+router.patch('/forward-number', configRateLimiter, updateForwardToNumber);
 
 export default router;

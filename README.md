@@ -120,6 +120,9 @@ https://abc123.ngrok.io/webhook
 | `GET` | `/health` | Health check — returns `{ status: "ok" }` |
 | `GET` | `/webhook` | Meta webhook verification handshake |
 | `POST` | `/webhook` | Receives incoming WhatsApp messages |
+| `PATCH` | `/config/forward-number` | Update forwarding number at runtime |
+| `GET` | `/docs` | Swagger UI — interactive API documentation |
+| `GET` | `/docs/spec` | OpenAPI JSON spec (for Postman import) |
 
 ---
 
@@ -237,6 +240,67 @@ docker run -d \
   -p 3000:3000 \
   --name whatsapp-forwarder \
   whatsapp-forwarder
+```
+
+---
+
+## 🧪 Frontend / API Testing
+
+### Option 1: Swagger UI (Recommended)
+Once the server is running, visit:
+```
+http://localhost:3000/docs
+```
+This opens an interactive API explorer where you can:
+- ✅ Test the `/health` endpoint
+- ✅ Test `PATCH /config/forward-number` to update the forwarding number
+- ✅ Simulate `POST /webhook` payloads (to test message forwarding locally)
+- ✅ Import the spec into Postman or Insomnia
+
+### Option 2: Import into Postman
+1. Open Postman → Import
+2. Enter URL: `http://localhost:3000/docs/spec`
+3. Postman will auto-generate a full collection from the OpenAPI spec
+
+### Option 3: cURL Examples
+
+#### Health Check
+```bash
+curl http://localhost:3000/health
+```
+
+#### Update Forwarding Number
+```bash
+curl -X PATCH http://localhost:3000/config/forward-number \
+  -H "Content-Type: application/json" \
+  -d '{"phoneNumber": "12345678900", "adminToken": "your_admin_token"}'
+```
+
+#### Simulate a WhatsApp Webhook (local testing)
+```bash
+curl -X POST http://localhost:3000/webhook \
+  -H "Content-Type: application/json" \
+  -d '{
+    "object": "whatsapp_business_account",
+    "entry": [{
+      "id": "123",
+      "changes": [{
+        "value": {
+          "messaging_product": "whatsapp",
+          "metadata": { "display_phone_number": "15551234567", "phone_number_id": "987" },
+          "contacts": [{ "profile": { "name": "Test User" }, "wa_id": "15559876543" }],
+          "messages": [{
+            "from": "15559876543",
+            "id": "wamid.test",
+            "timestamp": "1710400000",
+            "type": "text",
+            "text": { "body": "Hello from test!" }
+          }]
+        },
+        "field": "messages"
+      }]
+    }]
+  }'
 ```
 
 ---

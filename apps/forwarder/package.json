@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "nodemon",
     "build": "tsc",
+    "postbuild": "node -e \"const fs=require('fs');fs.copyFileSync('src/openapi.yaml','dist/openapi.yaml')\"",
     "start": "node dist/index.js",
     "lint": "eslint src --ext .ts",
     "format": "prettier --write src",
@@ -16,16 +17,22 @@
     "test:coverage": "jest --coverage"
   },
   "dependencies": {
+    "@whatsapp-forwarder/shared": "^1.0.0",
     "axios": "^1.6.7",
     "dotenv": "^16.4.1",
     "express": "^4.18.2",
+    "express-rate-limit": "^7.5.1",
+    "js-yaml": "^4.1.1",
+    "swagger-ui-express": "^5.0.1",
     "winston": "^3.11.0"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
     "@types/jest": "^29.5.12",
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.11.5",
     "@types/supertest": "^6.0.2",
+    "@types/swagger-ui-express": "^4.1.8",
     "@typescript-eslint/eslint-plugin": "^6.19.1",
     "@typescript-eslint/parser": "^6.19.1",
     "eslint": "^8.56.0",
