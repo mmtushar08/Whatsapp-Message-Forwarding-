@@ -5,15 +5,14 @@ import { configRateLimiter } from '../middleware/rateLimiter';
 const router = Router();
 
 /**
- * GET /messages
- * Returns paginated message forwarding history.
- * Query: ?limit=50&offset=0
+ * GET /messages?limit=50&offset=0
+ * Returns paginated forwarded message history.
  */
 router.get('/', configRateLimiter, getMessages);
 
 /**
  * GET /messages/stats
- * Returns aggregate stats (total, success, failed).
+ * Returns aggregate message statistics.
  */
 router.get('/stats', configRateLimiter, getStats);
 

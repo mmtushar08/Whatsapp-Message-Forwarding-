@@ -45,12 +45,14 @@ app.use((_req, res) => {
 
 // Start the server only when run directly (not imported in tests)
 if (require.main === module) {
+  initDatabase();
   app.listen(config.port, () => {
     logger.info(`🚀 WhatsApp Forwarder started on port ${config.port}`);
     logger.info(`📡 Webhook URL: http://localhost:${config.port}/webhook`);
     logger.info(`🔧 Config API: http://localhost:${config.port}/config/forward-number`);
     logger.info(`📊 Messages API: http://localhost:${config.port}/messages`);
     logger.info(`📖 API Docs: http://localhost:${config.port}/docs`);
+    logger.info(`📊 Messages API: http://localhost:${config.port}/messages`);
     logger.info(
       config.keywordFilters.length > 0
         ? `🔍 Keyword filters active: [${config.keywordFilters.join(', ')}]`

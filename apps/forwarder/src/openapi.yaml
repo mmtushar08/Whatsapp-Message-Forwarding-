@@ -32,7 +32,7 @@ tags:
   - name: Config
     description: Runtime configuration management
   - name: Messages
-    description: Message forwarding history and statistics
+    description: Forwarded message history and statistics
 
 paths:
   /health:
@@ -199,8 +199,8 @@ paths:
   /messages:
     get:
       tags: [Messages]
-      summary: Get message forwarding history
-      description: Returns a paginated list of all forwarded messages, newest first.
+      summary: Get paginated message history
+      description: Returns a paginated list of forwarded messages, newest first.
       operationId: getMessages
       parameters:
         - name: limit
@@ -208,19 +208,23 @@ paths:
           required: false
           schema:
             type: integer
-            default: 50
+            minimum: 1
             maximum: 100
-          description: Number of records to return
+            default: 50
+          description: Maximum number of records to return
+          example: 50
         - name: offset
           in: query
           required: false
           schema:
             type: integer
+            minimum: 0
             default: 0
           description: Number of records to skip
+          example: 0
       responses:
         '200':
-          description: Paginated message history
+          description: Paginated message logs
           content:
             application/json:
               schema:
@@ -232,12 +236,33 @@ paths:
                       $ref: '#/components/schemas/MessageLog'
                   pagination:
                     $ref: '#/components/schemas/Pagination'
+              example:
+                data:
+                  - id: 42
+                    from_number: '15559876543'
+                    to_number: '12345678900'
+                    message: 'Hello!'
+                    type: text
+                    status: success
+                    error: null
+                    forwarded_at: '2026-03-14T07:30:00.000Z'
+                pagination:
+                  total: 42
+                  limit: 50
+                  offset: 0
+                  hasMore: false
+        '429':
+          description: Too many requests (rate limited)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /messages/stats:
     get:
       tags: [Messages]
-      summary: Get message forwarding statistics
-      description: Returns aggregate stats - total, success, and failed message counts.
+      summary: Get message statistics
+      description: Returns aggregate counts of total, successful, and failed forwarded messages.
       operationId: getMessageStats
       responses:
         '200':
@@ -246,6 +271,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MessageStats'
+              example:
+                total: 150
+                success: 145
+                failed: 5
+        '429':
+          description: Too many requests (rate limited)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
 components:
   schemas:
@@ -316,7 +351,7 @@ components:
       properties:
         id:
           type: integer
-          example: 1
+          example: 42
         from_number:
           type: string
           example: '15559876543'
@@ -325,14 +360,14 @@ components:
           example: '12345678900'
         message:
           type: string
-          example: 'Hello, this is a test message!'
+          example: 'Hello!'
         type:
           type: string
-          example: text
+          example: 'text'
         status:
           type: string
           enum: [success, failed]
-          example: success
+          example: 'success'
         error:
           type: string
           nullable: true
@@ -340,7 +375,7 @@ components:
         forwarded_at:
           type: string
           format: date-time
-          example: '2026-03-14 07:30:00'
+          example: '2026-03-14T07:30:00.000Z'
 
     Pagination:
       type: object

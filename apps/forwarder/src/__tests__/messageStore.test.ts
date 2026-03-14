@@ -1,154 +1,146 @@
 import BetterSqlite3 from 'better-sqlite3';
-import { getDatabase } from '../db/database';
-import {
-  logMessage,
-  getMessageLogs,
-  getMessageLogCount,
-  getMessageStats,
-} from '../db/messageStore';
 
-// Mock the database module to use an in-memory SQLite instance
-jest.mock('../db/database');
-
-const mockedGetDatabase = getDatabase as jest.MockedFunction<typeof getDatabase>;
-
+// Use an in-memory SQLite database for isolation
 let testDb: BetterSqlite3.Database;
 
-function createTestSchema(db: BetterSqlite3.Database): void {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS message_logs (
-      id          INTEGER PRIMARY KEY AUTOINCREMENT,
-      from_number TEXT NOT NULL,
-      to_number   TEXT NOT NULL,
-      message     TEXT NOT NULL,
-      type        TEXT NOT NULL DEFAULT 'text',
-      status      TEXT NOT NULL DEFAULT 'success',
-      error       TEXT,
-      forwarded_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
-}
+jest.mock('../db/database', () => ({
+  getDatabase: () => testDb,
+  initDatabase: jest.fn(),
+}));
+
+// Import after mocking
+import { getMessageLogCount, getMessageLogs, getMessageStats, logMessage } from '../db/messageStore';
+
+const SCHEMA = `
+  CREATE TABLE IF NOT EXISTS message_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    from_number TEXT NOT NULL,
+    to_number TEXT NOT NULL,
+    message TEXT NOT NULL,
+    type TEXT NOT NULL DEFAULT 'text',
+    status TEXT NOT NULL,
+    error TEXT,
+    forwarded_at TEXT NOT NULL
+  )
+`;
 
 beforeEach(() => {
   testDb = new BetterSqlite3(':memory:');
-  createTestSchema(testDb);
-  mockedGetDatabase.mockReturnValue(testDb);
+  testDb.exec(SCHEMA);
 });
 
 afterEach(() => {
   testDb.close();
-  jest.clearAllMocks();
 });
 
-describe('messageStore', () => {
-  describe('logMessage', () => {
-    it('inserts a success record into message_logs', () => {
+describe('logMessage', () => {
+  it('inserts a success record into the database', () => {
+    logMessage({
+      from_number: '15551234567',
+      to_number: '15559876543',
+      message: 'Hello World',
+      type: 'text',
+      status: 'success',
+    });
+
+    const rows = testDb.prepare('SELECT * FROM message_logs').all() as { status: string }[];
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).toBe('success');
+  });
+
+  it('inserts a failed record with error details', () => {
+    logMessage({
+      from_number: '15551234567',
+      to_number: '15559876543',
+      message: 'Hello World',
+      status: 'failed',
+      error: 'API timeout',
+    });
+
+    const rows = testDb
+      .prepare('SELECT * FROM message_logs')
+      .all() as { status: string; error: string | null }[];
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).toBe('failed');
+    expect(rows[0].error).toBe('API timeout');
+  });
+
+  it('defaults type to "text" when not provided', () => {
+    logMessage({
+      from_number: '15551234567',
+      to_number: '15559876543',
+      message: 'Hello',
+      status: 'success',
+    });
+
+    const row = testDb.prepare('SELECT type FROM message_logs').get() as { type: string };
+    expect(row.type).toBe('text');
+  });
+});
+
+describe('getMessageLogs', () => {
+  beforeEach(() => {
+    // Insert 5 records
+    for (let i = 1; i <= 5; i++) {
       logMessage({
         from_number: '15551234567',
-        to_number: '12345678900',
-        message: 'Hello world',
-        type: 'text',
+        to_number: '15559876543',
+        message: `Message ${i}`,
         status: 'success',
       });
-
-      const count = getMessageLogCount();
-      expect(count).toBe(1);
-    });
-
-    it('inserts a failed record with error', () => {
-      logMessage({
-        from_number: '15551234567',
-        to_number: '12345678900',
-        message: 'Failed msg',
-        type: 'text',
-        status: 'failed',
-        error: 'API error',
-      });
-
-      const logs = getMessageLogs();
-      expect(logs).toHaveLength(1);
-      expect(logs[0]?.status).toBe('failed');
-      expect(logs[0]?.error).toBe('API error');
-    });
-
-    it('defaults type to "text" when not provided', () => {
-      logMessage({
-        from_number: '15551234567',
-        to_number: '12345678900',
-        message: 'Hello',
-        status: 'success',
-      });
-
-      const logs = getMessageLogs();
-      expect(logs[0]?.type).toBe('text');
-    });
+    }
   });
 
-  describe('getMessageLogs', () => {
-    beforeEach(() => {
-      // Insert 3 records
-      for (let i = 1; i <= 3; i++) {
-        logMessage({
-          from_number: `1555000000${i}`,
-          to_number: '12345678900',
-          message: `Message ${i}`,
-          status: 'success',
-        });
-      }
-    });
-
-    it('returns all records when under limit', () => {
-      const logs = getMessageLogs();
-      expect(logs).toHaveLength(3);
-    });
-
-    it('respects the limit parameter', () => {
-      const logs = getMessageLogs(2);
-      expect(logs).toHaveLength(2);
-    });
-
-    it('respects the offset parameter', () => {
-      const logs = getMessageLogs(10, 2);
-      expect(logs).toHaveLength(1);
-    });
-
-    it('returns records newest first (by forwarded_at desc)', () => {
-      const logs = getMessageLogs();
-      // All rows have same forwarded_at so order by id desc expected
-      // Just check all 3 are returned
-      expect(logs).toHaveLength(3);
-    });
+  it('returns records newest first', () => {
+    const logs = getMessageLogs(5, 0);
+    expect(logs).toHaveLength(5);
+    // Newest (id=5) should be first
+    expect(logs[0].id).toBe(5);
+    expect(logs[0].message).toBe('Message 5');
   });
 
-  describe('getMessageLogCount', () => {
-    it('returns 0 when no records exist', () => {
-      expect(getMessageLogCount()).toBe(0);
-    });
+  it('respects limit and offset for pagination', () => {
+    const page1 = getMessageLogs(2, 0);
+    const page2 = getMessageLogs(2, 2);
 
-    it('returns correct count after inserts', () => {
-      logMessage({ from_number: 'a', to_number: 'b', message: 'x', status: 'success' });
-      logMessage({ from_number: 'a', to_number: 'b', message: 'y', status: 'failed' });
-      expect(getMessageLogCount()).toBe(2);
-    });
+    expect(page1).toHaveLength(2);
+    expect(page2).toHaveLength(2);
+    // Pages should not overlap
+    expect(page1[0].id).not.toBe(page2[0].id);
   });
 
-  describe('getMessageStats', () => {
-    it('returns zeros when no records exist', () => {
-      const stats = getMessageStats();
-      expect(stats.total).toBe(0);
-      expect(stats.success).toBe(0);
-      expect(stats.failed).toBe(0);
-    });
+  it('returns empty array when offset exceeds total records', () => {
+    const logs = getMessageLogs(10, 100);
+    expect(logs).toHaveLength(0);
+  });
+});
 
-    it('returns correct totals for success and failed', () => {
-      logMessage({ from_number: 'a', to_number: 'b', message: '1', status: 'success' });
-      logMessage({ from_number: 'a', to_number: 'b', message: '2', status: 'success' });
-      logMessage({ from_number: 'a', to_number: 'b', message: '3', status: 'failed' });
+describe('getMessageLogCount', () => {
+  it('returns 0 for an empty table', () => {
+    expect(getMessageLogCount()).toBe(0);
+  });
 
-      const stats = getMessageStats();
-      expect(stats.total).toBe(3);
-      expect(stats.success).toBe(2);
-      expect(stats.failed).toBe(1);
-    });
+  it('returns the correct count after insertions', () => {
+    logMessage({ from_number: '111', to_number: '222', message: 'A', status: 'success' });
+    logMessage({ from_number: '111', to_number: '222', message: 'B', status: 'failed' });
+    expect(getMessageLogCount()).toBe(2);
+  });
+});
+
+describe('getMessageStats', () => {
+  it('returns zeros for an empty table', () => {
+    const stats = getMessageStats();
+    expect(stats).toEqual({ total: 0, success: 0, failed: 0 });
+  });
+
+  it('returns correct totals for mixed success/failed records', () => {
+    logMessage({ from_number: '111', to_number: '222', message: 'A', status: 'success' });
+    logMessage({ from_number: '111', to_number: '222', message: 'B', status: 'success' });
+    logMessage({ from_number: '111', to_number: '222', message: 'C', status: 'failed' });
+
+    const stats = getMessageStats();
+    expect(stats.total).toBe(3);
+    expect(stats.success).toBe(2);
+    expect(stats.failed).toBe(1);
   });
 });

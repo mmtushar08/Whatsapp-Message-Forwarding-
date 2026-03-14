@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { getPersistedForwardToNumber, persistForwardToNumber } from '../db/configStore';
 import logger from '../services/loggerService';
 
-// Load from DB on startup (falls back to env if not set in DB)
+// In-memory cache for the forward-to number (initialized from DB/env on startup)
 let currentForwardToNumber: string = getPersistedForwardToNumber();
 
 /**

@@ -102,7 +102,6 @@ export async function receiveWebhook(req: Request, res: Response): Promise<void>
         } else {
           logger.error(`❌ Failed to forward to ${maskPhoneNumber(to)}: ${error}`);
         }
-        // Log to DB
         logMessage({
           from_number: message.from,
           to_number: to,

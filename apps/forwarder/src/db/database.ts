@@ -1,72 +1,59 @@
 import BetterSqlite3 from 'better-sqlite3';
-import { mkdirSync } from 'fs';
+import fs from 'fs';
 import path from 'path';
-import logger from '../services/loggerService';
 
-const DB_PATH = process.env['DB_PATH']
-  ? path.resolve(process.cwd(), process.env['DB_PATH'])
-  : path.resolve(process.cwd(), 'data/forwarder.db');
+let db: BetterSqlite3.Database | null = null;
 
-let db: BetterSqlite3.Database | undefined;
+const DB_PATH = process.env['DB_PATH'] ?? 'data/forwarder.db';
 
 /**
- * Initializes the SQLite database and creates tables if they don't exist.
- * Should be called once on app startup.
+ * Initializes the SQLite database, creating the data directory and tables if needed.
+ * Enables WAL mode for improved concurrent read performance.
  */
-export function initDatabase(): BetterSqlite3.Database {
-  if (db) return db;
-  // Ensure data directory exists
-  mkdirSync(path.dirname(DB_PATH), { recursive: true });
+export function initDatabase(): void {
+  const dbPath = path.resolve(DB_PATH);
+  const dir = path.dirname(dbPath);
 
-  db = new BetterSqlite3(DB_PATH);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
 
-  // Enable WAL mode for better concurrent read performance
+  db = new BetterSqlite3(dbPath);
+
+  // Enable WAL mode for better performance
   db.pragma('journal_mode = WAL');
 
-  // Create config table (key-value store for settings)
+  // Create config table
   db.exec(`
     CREATE TABLE IF NOT EXISTS config (
-      key   TEXT PRIMARY KEY,
+      key TEXT PRIMARY KEY,
       value TEXT NOT NULL,
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      updated_at TEXT NOT NULL
     )
   `);
 
-  // Create message_logs table (history of forwarded messages)
+  // Create message_logs table
   db.exec(`
     CREATE TABLE IF NOT EXISTS message_logs (
-      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
       from_number TEXT NOT NULL,
-      to_number   TEXT NOT NULL,
-      message     TEXT NOT NULL,
-      type        TEXT NOT NULL DEFAULT 'text',
-      status      TEXT NOT NULL DEFAULT 'success',
-      error       TEXT,
-      forwarded_at TEXT NOT NULL DEFAULT (datetime('now'))
+      to_number TEXT NOT NULL,
+      message TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'text',
+      status TEXT NOT NULL,
+      error TEXT,
+      forwarded_at TEXT NOT NULL
     )
   `);
-
-  logger.info(`✅ Database initialized at ${DB_PATH}`);
-  return db;
 }
 
 /**
- * Returns the initialized database instance.
- * Calls initDatabase() if not yet initialized.
+ * Returns the active database instance.
+ * @throws Error if the database has not been initialized yet.
  */
 export function getDatabase(): BetterSqlite3.Database {
   if (!db) {
-    return initDatabase();
+    throw new Error('Database not initialized. Call initDatabase() first.');
   }
   return db;
-}
-
-/**
- * Closes the database connection. Used in tests for cleanup.
- */
-export function closeDatabase(): void {
-  if (db) {
-    db.close();
-    db = undefined;
-  }
 }
