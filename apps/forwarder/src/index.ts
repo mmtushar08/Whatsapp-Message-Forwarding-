@@ -1,4 +1,5 @@
 import express, { Request } from 'express';
+import cors from 'cors';
 import config from './config';
 import { initDatabase } from './db/database';
 import logger from './services/loggerService';
@@ -11,6 +12,18 @@ import webhookRouter from './routes/webhook';
 initDatabase();
 
 const app = express();
+
+// CORS — allow the dashboard frontend to call the API from a different origin
+const corsOrigin = process.env['CORS_ORIGIN'] ?? '*';
+if (corsOrigin === '*') {
+  logger.warn('⚠️  CORS_ORIGIN is not set — allowing all origins. Set CORS_ORIGIN in production.');
+}
+app.use(
+  cors({
+    origin: corsOrigin,
+    methods: ['GET', 'POST', 'PATCH'],
+  }),
+);
 
 // Parse incoming JSON bodies and capture raw bytes for webhook signature verification
 app.use(

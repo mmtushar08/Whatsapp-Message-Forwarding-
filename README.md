@@ -389,4 +389,32 @@ WHATSAPP_APP_SECRET=your_meta_app_secret_here
 | Header invalid + secret set | `401 Invalid signature` |
 | Header valid + secret set | Request proceeds normally |
 
+---
+
+## 🖥️ Dashboard UI
+
+A visual end-user dashboard is available at `apps/dashboard`.
+
+### Running locally
+```bash
+cd apps/dashboard
+npm install
+npm run dev
+# Opens at http://localhost:5173
+```
+
+### Deploy to Vercel (free)
+1. Push this repo to GitHub
+2. Go to [vercel.com](https://vercel.com) → Import Project → select this repo
+3. Set environment variable: `VITE_API_BASE_URL=https://your-backend-url`
+4. Deploy — your dashboard will be live at `https://your-app.vercel.app`
+
+### Pages
+| URL | Description |
+|-----|-------------|
+| `/` | Dashboard with stats and recent messages |
+| `/messages` | Full paginated message history |
+| `/settings` | Update forwarding phone number |
+
+
 > ⚠️ Setting `WHATSAPP_APP_SECRET` is **strongly recommended** for production to prevent spoofed webhook payloads.

@@ -13,3 +13,15 @@ services:
     volumes:
       - ./apps/forwarder/logs:/app/logs
       - ./data:/app/data
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: apps/dashboard/Dockerfile
+    container_name: whatsapp-dashboard
+    ports:
+      - "5173:80"
+    depends_on:
+      - forwarder
+    environment:
+      - VITE_API_BASE_URL=http://forwarder:3000
