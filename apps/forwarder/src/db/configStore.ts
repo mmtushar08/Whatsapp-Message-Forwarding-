@@ -1,6 +1,8 @@
 import { getDatabase } from './database';
 
 const CONFIG_KEY_FORWARD_NUMBER = 'forward_to_number';
+const CONFIG_KEY_KEYWORD_FILTERS = 'keyword_filters';
+const CONFIG_KEY_FORWARDING_ENABLED = 'forwarding_enabled';
 
 /**
  * Reads the persisted forward-to number from the database.
@@ -17,6 +19,31 @@ export function getPersistedForwardToNumber(): string {
  */
 export function persistForwardToNumber(phoneNumber: string): void {
   setConfigValue(CONFIG_KEY_FORWARD_NUMBER, phoneNumber);
+}
+
+export function getPersistedKeywordFilters(): string[] {
+  const raw = getConfigValue(CONFIG_KEY_KEYWORD_FILTERS) ?? process.env['KEYWORD_FILTERS'] ?? '';
+  return raw
+    .split(',')
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+export function persistKeywordFilters(keywordFilters: string[]): void {
+  setConfigValue(CONFIG_KEY_KEYWORD_FILTERS, keywordFilters.join(','));
+}
+
+export function getPersistedForwardingEnabled(): boolean {
+  const raw = getConfigValue(CONFIG_KEY_FORWARDING_ENABLED);
+  if (!raw) {
+    return true;
+  }
+
+  return raw === 'true';
+}
+
+export function persistForwardingEnabled(forwardingEnabled: boolean): void {
+  setConfigValue(CONFIG_KEY_FORWARDING_ENABLED, forwardingEnabled ? 'true' : 'false');
 }
 
 /**

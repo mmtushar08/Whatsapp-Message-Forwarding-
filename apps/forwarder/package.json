@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "nodemon",
     "build": "tsc",
-    "postbuild": "node -e \"const fs=require('fs');fs.copyFileSync('src/openapi.yaml','dist/openapi.yaml')\"",
+    "postbuild": "node -e \"const fs=require('fs');fs.copyFileSync('src/openapi.yaml','dist/openapi.yaml');fs.cpSync('src/public','dist/public',{recursive:true})\"",
     "start": "node dist/index.js",
     "lint": "eslint src --ext .ts",
     "format": "prettier --write src",

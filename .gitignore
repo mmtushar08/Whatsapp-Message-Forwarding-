@@ -4,6 +4,8 @@ node_modules/
 # Build output
 dist/
 build/
+coverage/
+apps/forwarder/src/coverage/
 
 # Environment variables (NEVER commit secrets)
 .env

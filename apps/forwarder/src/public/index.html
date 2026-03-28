@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WhatsApp Forwarder Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/dashboard.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <p class="eyebrow">WhatsApp Message Forwarding</p>
+        <h1>Operate your forwarding flow from one small dashboard.</h1>
+        <p class="hero-copy">
+          Sign in with your admin token to check service health, update forwarding rules, and
+          review the latest forwarded messages.
+        </p>
+      </section>
+
+      <section class="panel auth-panel" id="auth-panel">
+        <div>
+          <h2>Admin Access</h2>
+          <p>Use the server-side admin token. Meta credentials stay private on the server.</p>
+        </div>
+        <form id="auth-form" class="stack">
+          <label class="field">
+            <span>Admin token</span>
+            <input id="admin-token" type="password" autocomplete="current-password" required />
+          </label>
+          <div class="actions">
+            <button type="submit">Open Dashboard</button>
+            <button type="button" class="ghost" id="clear-token">Clear Saved Token</button>
+          </div>
+          <p class="feedback" id="auth-feedback"></p>
+        </form>
+      </section>
+
+      <section class="dashboard hidden" id="dashboard">
+        <div class="grid summary-grid">
+          <article class="panel metric">
+            <span>Service Health</span>
+            <strong id="health-status">Checking...</strong>
+            <small id="health-timestamp">Waiting for server</small>
+          </article>
+          <article class="panel metric">
+            <span>Total Messages</span>
+            <strong id="stats-total">0</strong>
+            <small id="stats-success">0 successful forwards</small>
+          </article>
+          <article class="panel metric">
+            <span>Failed Messages</span>
+            <strong id="stats-failed">0</strong>
+            <small id="forwarding-state">Forwarding active</small>
+          </article>
+        </div>
+
+        <div class="grid main-grid">
+          <section class="panel">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Settings</p>
+                <h2>Forwarding controls</h2>
+              </div>
+              <button type="button" class="ghost" id="refresh-dashboard">Refresh</button>
+            </div>
+            <form id="settings-form" class="stack">
+              <label class="field">
+                <span>Forward to number</span>
+                <input id="phone-number" type="text" inputmode="numeric" required />
+              </label>
+              <label class="field">
+                <span>Keyword filters</span>
+                <input id="keyword-filters" type="text" placeholder="urgent, invoice, vip" />
+              </label>
+              <label class="toggle">
+                <input id="forwarding-enabled" type="checkbox" />
+                <span>Forward incoming messages</span>
+              </label>
+              <div class="actions">
+                <button type="submit">Save Settings</button>
+                <button type="button" class="ghost" id="logout">Log Out</button>
+              </div>
+              <p class="feedback" id="settings-feedback"></p>
+            </form>
+          </section>
+
+          <section class="panel">
+            <p class="eyebrow">Status</p>
+            <h2>Connection overview</h2>
+            <dl class="detail-list">
+              <div>
+                <dt>Webhook</dt>
+                <dd id="webhook-path">/webhook</dd>
+              </div>
+              <div>
+                <dt>Health endpoint</dt>
+                <dd id="health-path">/health</dd>
+              </div>
+              <div>
+                <dt>Docs</dt>
+                <dd id="docs-path">/docs</dd>
+              </div>
+              <div>
+                <dt>Current filters</dt>
+                <dd id="active-filters">All messages</dd>
+              </div>
+            </dl>
+          </section>
+        </div>
+
+        <section class="panel">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Logs</p>
+              <h2>Recent forwarded messages</h2>
+            </div>
+            <small>Latest 20 records</small>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th>From</th>
+                  <th>To</th>
+                  <th>Message</th>
+                  <th>Time</th>
+                </tr>
+              </thead>
+              <tbody id="messages-table">
+                <tr>
+                  <td colspan="5">No messages yet.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="/dashboard.js"></script>
+  </body>
+</html>

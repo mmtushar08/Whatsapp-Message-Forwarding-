@@ -3,5 +3,9 @@
 declare namespace Express {
   interface Request {
     rawBody?: Buffer;
+    auth?: {
+      userId: string;
+      sessionTokenHash: string;
+    };
   }
 }

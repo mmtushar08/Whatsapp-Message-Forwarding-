@@ -1,8 +1,13 @@
 # 👋 Welcome to WhatsApp Message Forwarding App!
 
-This guide is for **non-technical users** who want to use the WhatsApp Message Forwarding app. No coding experience required! Just follow the steps below. 😊
+This guide is for **non-technical users** who want to use the WhatsApp Message Forwarding app. No coding experience required! Just follow the steps below.
 
-> ⚠️ **Important:** This app uses the **WhatsApp Cloud API** (not the regular WhatsApp Business App). This means the **developer (app owner)** handles all the technical setup — **you as an end user only need to provide your phone number!** That's it! 🎉
+Important context:
+- the current repository already includes a single-admin browser dashboard
+- the product direction is shifting toward a hosted web app where users create accounts and manage forwarding online
+- that future flow is documented in `docs/WEB_PRODUCT_FLOW.md`
+
+> Important: this app uses the **WhatsApp Cloud API**. In the current version, the app owner still manages the Meta-side technical setup. In the planned hosted version, users will create accounts and manage forwarding from the web dashboard.
 
 ---
 

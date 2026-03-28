@@ -1,12 +1,47 @@
-export interface MessageLog {
-  id: number;
-  from_number: string;
-  to_number: string;
+export interface MarketplaceUser {
+  id: string;
+  name: string;
+  email: string;
+  createdAt: string;
+}
+
+export interface WorkspaceSetup {
+  id: string;
+  userId: string;
+  businessLabel: string;
+  sourcePhoneNumber: string;
+  phoneNumberId: string;
+  accessTokenPreview: string;
+  appSecretConfigured: boolean;
+  forwardToNumber: string;
+  keywordFilters: string[];
+  forwardingEnabled: boolean;
+  webhookVerifyToken: string;
+  webhookUrl: string;
+  status: 'needs_webhook_setup' | 'connected';
+  updatedAt: string;
+}
+
+export interface WorkspaceSettingsInput {
+  businessLabel: string;
+  sourcePhoneNumber: string;
+  phoneNumberId: string;
+  accessToken: string;
+  appSecret: string;
+  forwardToNumber: string;
+  keywordFilters: string;
+  forwardingEnabled: boolean;
+}
+
+export interface PrototypeMessageLog {
+  id: string | number;
+  workspace_id?: string | null;
+  from: string;
+  to: string;
   message: string;
-  type: string;
   status: 'success' | 'failed';
-  error: string | null;
-  forwarded_at: string;
+  forwardedAt: string;
+  error?: string;
 }
 
 export interface MessageStats {
@@ -20,9 +55,4 @@ export interface Pagination {
   limit: number;
   offset: number;
   hasMore: boolean;
-}
-
-export interface MessagesResponse {
-  data: MessageLog[];
-  pagination: Pagination;
 }

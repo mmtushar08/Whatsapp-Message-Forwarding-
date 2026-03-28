@@ -7,21 +7,21 @@ import logger from './loggerService';
 
 const GRAPH_API_URL = 'https://graph.facebook.com/v18.0';
 
-/**
- * Forwards a message to a specific destination number via WhatsApp Cloud API.
- *
- * @param from - The sender's phone number (for logging purposes).
- * @param originalText - The original message text to forward.
- * @param to - The destination phone number.
- * @returns The API response object.
- * @throws Error if the API call fails after all retry attempts.
- */
+export interface WhatsappRuntimeConfig {
+  accessToken: string;
+  phoneNumberId: string;
+}
+
 export async function forwardMessageTo(
   from: string,
   originalText: string,
   to: string,
+  runtimeConfig: WhatsappRuntimeConfig = {
+    accessToken: config.whatsappAccessToken,
+    phoneNumberId: config.whatsappPhoneNumberId,
+  },
 ): Promise<SendMessageResponse> {
-  const url = `${GRAPH_API_URL}/${config.whatsappPhoneNumberId}/messages`;
+  const url = `${GRAPH_API_URL}/${runtimeConfig.phoneNumberId}/messages`;
 
   const payload: SendMessagePayload = {
     messaging_product: 'whatsapp',
@@ -33,7 +33,7 @@ export async function forwardMessageTo(
   };
 
   const headers = {
-    Authorization: `Bearer ${config.whatsappAccessToken}`,
+    Authorization: `Bearer ${runtimeConfig.accessToken}`,
     'Content-Type': 'application/json',
   };
 
@@ -59,15 +59,6 @@ export async function forwardMessageTo(
   }
 }
 
-/**
- * Forwards a message to the configured destination number via WhatsApp Cloud API.
- * Backwards-compatible wrapper around forwardMessageTo.
- *
- * @param from - The sender's phone number (for logging purposes).
- * @param originalText - The original message text to forward.
- * @returns The API response object.
- * @throws Error if the API call fails.
- */
 export async function forwardMessage(
   from: string,
   originalText: string,
@@ -76,23 +67,15 @@ export async function forwardMessage(
   return forwardMessageTo(from, originalText, forwardTo);
 }
 
-/**
- * Forwards a message to multiple recipients in parallel.
- * Each recipient gets their own API call.
- *
- * @param from - The sender's phone number
- * @param originalText - The original message text
- * @param recipients - Array of destination phone numbers
- * @returns Array of results (success or error per recipient)
- */
 export async function forwardToMultiple(
   from: string,
   originalText: string,
   recipients: string[],
+  runtimeConfig?: WhatsappRuntimeConfig,
 ): Promise<{ to: string; success: boolean; error?: string }[]> {
   const results = await Promise.allSettled(
     recipients.map(async (to) => {
-      await forwardMessageTo(from, originalText, to);
+      await forwardMessageTo(from, originalText, to, runtimeConfig);
       return to;
     }),
   );

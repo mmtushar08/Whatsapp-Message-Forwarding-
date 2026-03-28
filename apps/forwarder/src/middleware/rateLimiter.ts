@@ -26,3 +26,11 @@ export const configRateLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Too many config update requests, please try again later.' },
 });
+
+export const authRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many authentication requests, please try again later.' },
+});

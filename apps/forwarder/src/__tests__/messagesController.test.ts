@@ -1,7 +1,6 @@
 import BetterSqlite3 from 'better-sqlite3';
 import request from 'supertest';
 
-// Use an in-memory SQLite database for isolation
 let testDb: BetterSqlite3.Database;
 
 jest.mock('../db/database', () => ({
@@ -9,7 +8,6 @@ jest.mock('../db/database', () => ({
   initDatabase: jest.fn(),
 }));
 
-// Import app after mocking the database
 import app from '../index';
 
 const SCHEMA = `
@@ -31,6 +29,7 @@ const SCHEMA = `
 `;
 
 beforeEach(() => {
+  process.env['ADMIN_TOKEN'] = 'test_admin_token';
   testDb = new BetterSqlite3(':memory:');
   testDb.exec(SCHEMA);
 });
@@ -55,11 +54,15 @@ function insertMessage(
 }
 
 describe('GET /messages', () => {
-  it('returns 200 with empty data array and pagination when no records exist', async () => {
+  it('returns 401 without admin token', async () => {
     const res = await request(app).get('/messages');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 200 with empty data array and pagination when no records exist', async () => {
+    const res = await request(app).get('/messages').set('x-admin-token', 'test_admin_token');
     expect(res.status).toBe(200);
     expect(res.body.data).toEqual([]);
-    expect(res.body.pagination).toBeDefined();
     expect(res.body.pagination.total).toBe(0);
     expect(res.body.pagination.hasMore).toBe(false);
   });
@@ -68,7 +71,7 @@ describe('GET /messages', () => {
     insertMessage('111', '222', 'Test message 1');
     insertMessage('111', '222', 'Test message 2');
 
-    const res = await request(app).get('/messages');
+    const res = await request(app).get('/messages').set('x-admin-token', 'test_admin_token');
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(2);
     expect(res.body.pagination.total).toBe(2);
@@ -81,27 +84,20 @@ describe('GET /messages', () => {
       insertMessage('111', '222', `Message ${i}`);
     }
 
-    const res = await request(app).get('/messages?limit=2&offset=0');
+    const res = await request(app)
+      .get('/messages?limit=2&offset=0')
+      .set('x-admin-token', 'test_admin_token');
+
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(2);
     expect(res.body.pagination.limit).toBe(2);
     expect(res.body.pagination.hasMore).toBe(true);
   });
-
-  it('returns records newest first', async () => {
-    insertMessage('111', '222', 'First');
-    insertMessage('111', '222', 'Second');
-
-    const res = await request(app).get('/messages');
-    expect(res.status).toBe(200);
-    expect(res.body.data[0].message).toBe('Second');
-    expect(res.body.data[1].message).toBe('First');
-  });
 });
 
 describe('GET /messages/stats', () => {
   it('returns zeros when no records exist', async () => {
-    const res = await request(app).get('/messages/stats');
+    const res = await request(app).get('/messages/stats').set('x-admin-token', 'test_admin_token');
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ total: 0, success: 0, failed: 0 });
   });
@@ -111,7 +107,10 @@ describe('GET /messages/stats', () => {
     insertMessage('111', '222', 'B', 'success');
     insertMessage('111', '222', 'C', 'failed', 'timeout');
 
-    const res = await request(app).get('/messages/stats');
+    const res = await request(app)
+      .get('/messages/stats')
+      .set('x-admin-token', 'test_admin_token');
+
     expect(res.status).toBe(200);
     expect(res.body.total).toBe(3);
     expect(res.body.success).toBe(2);

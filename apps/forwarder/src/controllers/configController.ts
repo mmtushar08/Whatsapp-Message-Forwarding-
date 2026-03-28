@@ -1,65 +1,164 @@
 import { Request, Response } from 'express';
-import { getPersistedForwardToNumber, persistForwardToNumber } from '../db/configStore';
+import {
+  getPersistedForwardingEnabled,
+  getPersistedForwardToNumber,
+  getPersistedKeywordFilters,
+  persistForwardingEnabled,
+  persistForwardToNumber,
+  persistKeywordFilters,
+} from '../db/configStore';
 import logger from '../services/loggerService';
 
-// In-memory cache for the forward-to number (initialized from DB/env on startup)
 let currentForwardToNumber: string = getPersistedForwardToNumber();
+let currentKeywordFilters: string[] = getPersistedKeywordFilters();
+let currentForwardingEnabled: boolean = getPersistedForwardingEnabled();
 
-/**
- * Returns the current forward-to number (for internal use by other services).
- */
+export interface DashboardSettings {
+  forwardToNumber: string;
+  keywordFilters: string[];
+  forwardingEnabled: boolean;
+}
+
 export function getForwardToNumber(): string {
   return currentForwardToNumber;
 }
 
-/**
- * PATCH /config/forward-number
- * Updates the phone number messages are forwarded to.
- *
- * Requires:
- * - Body: { phoneNumber: string, adminToken: string }
- * - adminToken must match ADMIN_TOKEN env variable
- *
- * This allows end users to update their forwarding number without
- * touching the server config files.
- */
-export function updateForwardToNumber(req: Request, res: Response): void {
-  const { phoneNumber, adminToken } = req.body as { phoneNumber?: string; adminToken?: string };
+export function getKeywordFilters(): string[] {
+  return currentKeywordFilters;
+}
 
-  // Validate admin token
-  const expectedToken = process.env['ADMIN_TOKEN'];
-  if (!expectedToken || adminToken !== expectedToken) {
-    logger.warn('Unauthorized attempt to update forward-to number');
-    res.status(401).json({ error: 'Unauthorized: invalid admin token' });
+export function isForwardingEnabled(): boolean {
+  return currentForwardingEnabled;
+}
+
+export function getDashboardSettings(): DashboardSettings {
+  return {
+    forwardToNumber: currentForwardToNumber,
+    keywordFilters: currentKeywordFilters,
+    forwardingEnabled: currentForwardingEnabled,
+  };
+}
+
+function normalizePhoneNumber(phoneNumber: string): string {
+  const cleaned = phoneNumber.replace(/\D/g, '');
+  if (cleaned.length < 7 || cleaned.length > 15) {
+    throw new Error('Invalid phone number. Must be 7-15 digits with country code (no + sign).');
+  }
+
+  return cleaned;
+}
+
+function normalizeKeywordFilters(keywordFilters: unknown): string[] {
+  const rawValues = Array.isArray(keywordFilters)
+    ? keywordFilters
+    : typeof keywordFilters === 'string'
+      ? keywordFilters.split(',')
+      : [];
+
+  return rawValues
+    .map((value) => String(value).trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function applySettingsUpdate(input: {
+  phoneNumber?: string;
+  keywordFilters?: unknown;
+  forwardingEnabled?: unknown;
+}): DashboardSettings {
+  if (typeof input.phoneNumber === 'string') {
+    currentForwardToNumber = normalizePhoneNumber(input.phoneNumber);
+    persistForwardToNumber(currentForwardToNumber);
+  }
+
+  if (input.keywordFilters !== undefined) {
+    currentKeywordFilters = normalizeKeywordFilters(input.keywordFilters);
+    persistKeywordFilters(currentKeywordFilters);
+  }
+
+  if (typeof input.forwardingEnabled === 'boolean') {
+    currentForwardingEnabled = input.forwardingEnabled;
+    persistForwardingEnabled(currentForwardingEnabled);
+  }
+
+  return getDashboardSettings();
+}
+
+export function getSettings(_req: Request, res: Response): void {
+  res.status(200).json({
+    settings: getDashboardSettings(),
+    meta: {
+      webhookPath: '/webhook',
+      healthPath: '/health',
+      messagesPath: '/messages',
+      docsPath: '/docs',
+    },
+  });
+}
+
+export function updateSettings(req: Request, res: Response): void {
+  const { phoneNumber, keywordFilters, forwardingEnabled } = req.body as {
+    phoneNumber?: string;
+    keywordFilters?: string[] | string;
+    forwardingEnabled?: boolean;
+  };
+
+  if (
+    phoneNumber === undefined &&
+    keywordFilters === undefined &&
+    forwardingEnabled === undefined
+  ) {
+    res.status(400).json({
+      error: 'At least one of phoneNumber, keywordFilters, or forwardingEnabled is required.',
+    });
     return;
   }
 
-  // Validate phone number
+  try {
+    const previous = getDashboardSettings();
+    const current = applySettingsUpdate({ phoneNumber, keywordFilters, forwardingEnabled });
+
+    logger.info(
+      `Dashboard settings updated | Forwarding: ${previous.forwardingEnabled} -> ${current.forwardingEnabled} | Filters: ${previous.keywordFilters.length} -> ${current.keywordFilters.length}`,
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Settings updated successfully',
+      previous,
+      current,
+    });
+  } catch (error) {
+    res.status(400).json({
+      error: (error as Error).message,
+      example: '12345678900',
+    });
+  }
+}
+
+export function updateForwardToNumber(req: Request, res: Response): void {
+  const { phoneNumber } = req.body as { phoneNumber?: string };
+
   if (!phoneNumber) {
     res.status(400).json({ error: 'phoneNumber is required' });
     return;
   }
 
-  // Basic phone number validation: digits only, 7-15 characters
-  const cleaned = phoneNumber.replace(/\D/g, '');
-  if (cleaned.length < 7 || cleaned.length > 15) {
+  try {
+    const previous = currentForwardToNumber;
+    const current = applySettingsUpdate({ phoneNumber }).forwardToNumber;
+
+    logger.info(`Forward-to number updated: ****${previous.slice(-4)} -> ****${current.slice(-4)}`);
+
+    res.status(200).json({
+      success: true,
+      message: 'Forward-to number updated successfully',
+      previous,
+      current,
+    });
+  } catch (error) {
     res.status(400).json({
-      error: 'Invalid phone number. Must be 7-15 digits with country code (no + sign).',
+      error: (error as Error).message,
       example: '12345678900',
     });
-    return;
   }
-
-  const previous = currentForwardToNumber;
-  currentForwardToNumber = cleaned;
-  persistForwardToNumber(cleaned);
-
-  logger.info(`✅ Forward-to number updated: ****${previous.slice(-4)} → ****${cleaned.slice(-4)}`);
-
-  res.status(200).json({
-    success: true,
-    message: 'Forward-to number updated successfully',
-    previous,
-    current: cleaned,
-  });
 }

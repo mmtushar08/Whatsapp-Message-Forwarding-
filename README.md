@@ -4,6 +4,15 @@
 
 A **production-ready WhatsApp Message Forwarding application** built with **Node.js + TypeScript + Express.js** and the **WhatsApp Cloud API (Meta)**. Automatically forwards incoming WhatsApp messages to a target number, with optional keyword-based filtering.
 
+This repository is now evolving in two layers:
+- the current `apps/forwarder` backend and admin dashboard for one managed deployment
+- a planned hosted web product where users create accounts and manage forwarding from the browser
+
+The hosted web product direction is documented in:
+- `docs/WEB_PRODUCT_FLOW.md`
+- `docs/MVP_REQUIREMENTS.md`
+- `docs/IMPLEMENTATION_ROADMAP.md`
+
 ---
 
 ## ✨ Features
@@ -16,6 +25,7 @@ A **production-ready WhatsApp Message Forwarding application** built with **Node
 - 🏗️ **Monorepo structure** — clean `apps/forwarder/` workspace
 - 💾 **Persistent storage** — SQLite DB stores forwarding number and message history (survives restarts)
 - 📊 **Message history API** — query forwarded messages and stats via REST endpoints
+- 🖥️ **Built-in admin dashboard** — manage forwarding settings and review recent message activity in the browser
 
 ---
 
@@ -93,6 +103,20 @@ npm run build
 npm start
 ```
 
+### 6. Open the built-in dashboard
+
+Once the app is running, open:
+
+```bash
+http://localhost:3000/
+```
+
+Use your `ADMIN_TOKEN` to sign in and manage:
+- forwarding number
+- keyword filters
+- forwarding on/off
+- recent message logs and stats
+
 ---
 
 ## 🌐 Exposing localhost with ngrok (for webhook testing)
@@ -122,6 +146,14 @@ https://abc123.ngrok.io/webhook
 | `GET` | `/health` | Health check — returns `{ status: "ok" }` |
 | `GET` | `/webhook` | Meta webhook verification handshake |
 | `POST` | `/webhook` | Receives incoming WhatsApp messages |
+| `GET` | `/` | Built-in admin dashboard |
+| `POST` | `/auth/signup` | Create a hosted-product user account |
+| `POST` | `/auth/login` | Create a session for a hosted-product user |
+| `GET` | `/auth/me` | Read the signed-in user and workspace |
+| `PATCH` | `/app/workspace` | Save hosted-product workspace setup |
+| `GET` | `/app/workspace` | Read hosted-product workspace setup |
+| `GET` | `/config/settings` | Read dashboard settings and endpoint metadata |
+| `PATCH` | `/config/settings` | Update forwarding number, filters, and forwarding state |
 | `PATCH` | `/config/forward-number` | Update forwarding number at runtime |
 | `GET` | `/messages` | Paginated forwarded message history |
 | `GET` | `/messages/stats` | Aggregate message statistics |
@@ -146,13 +178,21 @@ apps/
       routes/
         webhook.ts                # Webhook routes (GET verify + POST receive)
         messages.ts               # Message history routes
+        config.ts                 # Dashboard settings routes
       controllers/
         webhookController.ts      # Handles incoming webhook events
         messagesController.ts     # GET /messages and /messages/stats
+        configController.ts       # Dashboard settings and forwarding config
+      middleware/
+        adminAuth.ts              # Admin token guard for dashboard APIs
       services/
         whatsappService.ts        # Calls WhatsApp Cloud API to forward messages
         filterService.ts          # Keyword/filter logic
         loggerService.ts          # Winston logger setup
+      public/
+        index.html                # Built-in admin dashboard UI
+        dashboard.css             # Dashboard styles
+        dashboard.js              # Dashboard client logic
       types/
         whatsapp.ts               # TypeScript types for WhatsApp API payloads
       utils/
@@ -178,6 +218,123 @@ data/
 3. filterService checks if message passes keyword filters (if any configured)
 4. If passes → whatsappService.forwardMessage() calls WhatsApp Cloud API
 5. loggerService logs: timestamp, sender, message, filter result, forwarding status
+```
+
+## 🧭 Product Direction
+
+### Current state
+
+Today, this repository supports a **single managed forwarding deployment**:
+- one backend service
+- one admin token
+- one operator-managed WhatsApp Cloud API setup
+- runtime updates for destination number, filters, and pause/resume
+
+### Target state
+
+The next product direction is a **hosted web app** where users:
+1. create an account on the website
+2. connect their WhatsApp Cloud API details
+3. configure source and destination forwarding rules
+4. manage forwarding from the web dashboard
+5. review logs and webhook status from their browser
+
+This means users will not need to download or self-host the app. They will manage it through a web account instead.
+
+See:
+- `docs/WEB_PRODUCT_FLOW.md`
+- `docs/MVP_REQUIREMENTS.md`
+- `docs/IMPLEMENTATION_ROADMAP.md`
+
+## 🛣 Future Roadmap
+
+### Phase 2: Production Readiness
+
+Focus:
+- move the hosted product from test mode to a stable customer-ready release
+
+Planned work:
+- domain and SSL setup
+- HTTPS webhook URL for Meta production use
+- better onboarding help for Meta credentials
+- connection test flow
+- password reset
+- email verification
+- session and account security improvements
+- monitoring and webhook failure alerting
+- database backup strategy
+- admin support tools
+- audit logs
+
+Outcome:
+- a safer and easier-to-run hosted MVP
+
+### Phase 3: Product Expansion
+
+Focus:
+- add more value for real forwarding use cases while staying narrow
+
+Planned work:
+- multiple forwarding rules
+- multiple destination numbers
+- keyword-based routing
+- schedule-based forwarding
+- business-hours forwarding
+- attachment/media forwarding controls
+- fallback forwarding number
+- delivery failure notifications
+- analytics and reports
+- billing and plan limits
+- team access for one workspace
+- agency or white-label options
+
+Outcome:
+- a more commercial and flexible forwarding product without becoming a full inbox platform
+
+### Not Planned For Now
+
+These are intentionally not the priority:
+- full chat inbox
+- CRM/contact management
+- AI chatbot features
+- complex automation builder
+
+## 🌐 Hosted Web Prototype
+
+The existing React workspace at `apps/dashboard` is now being repurposed as the hosted product prototype.
+
+Current prototype capabilities:
+- landing page
+- signup flow
+- login flow
+- onboarding flow
+- browser-managed workspace settings
+- prototype logs and webhook setup summary
+
+Current prototype limitation:
+- account and workspace data are stored in browser local storage only
+- real multi-user backend auth is not implemented yet
+- real per-user webhook routing is not implemented yet
+
+Run it locally:
+
+```bash
+cd apps/dashboard
+npm install
+npm run dev
+```
+
+Backend foundation now added in `apps/forwarder`:
+- user signup/login endpoints
+- session-protected workspace endpoints
+- SQLite tables for users, sessions, and workspaces
+
+Recommended env additions for this foundation:
+
+```env
+APP_ENCRYPTION_KEY=change_this_to_a_long_random_secret
+SESSION_TTL_HOURS=24
+PUBLIC_APP_URL=https://your-domain.com
 ```
 
 ---
@@ -336,7 +493,22 @@ curl http://localhost:3000/health
 ```bash
 curl -X PATCH http://localhost:3000/config/forward-number \
   -H "Content-Type: application/json" \
-  -d '{"phoneNumber": "12345678900", "adminToken": "your_admin_token"}'
+  -H "x-admin-token: your_admin_token" \
+  -d '{"phoneNumber": "12345678900"}'
+```
+
+#### Read Dashboard Settings
+```bash
+curl http://localhost:3000/config/settings \
+  -H "x-admin-token: your_admin_token"
+```
+
+#### Update Dashboard Settings
+```bash
+curl -X PATCH http://localhost:3000/config/settings \
+  -H "Content-Type: application/json" \
+  -H "x-admin-token: your_admin_token" \
+  -d '{"phoneNumber":"12345678900","keywordFilters":"urgent,vip","forwardingEnabled":true}'
 ```
 
 #### Simulate a WhatsApp Webhook (local testing)
@@ -391,30 +563,31 @@ WHATSAPP_APP_SECRET=your_meta_app_secret_here
 
 ---
 
-## 🖥️ Dashboard UI
+## 🖥️ Built-In Dashboard
 
-A visual end-user dashboard is available at `apps/dashboard`.
+The current project ships with a built-in admin dashboard served from the backend itself.
 
-### Running locally
+### Access
 ```bash
-cd apps/dashboard
-npm install
-npm run dev
-# Opens at http://localhost:5173
+http://localhost:3000/
 ```
 
-### Deploy to Vercel (free)
-1. Push this repo to GitHub
-2. Go to [vercel.com](https://vercel.com) → Import Project → select this repo
-3. Set environment variable: `VITE_API_BASE_URL=https://your-backend-url`
-4. Deploy — your dashboard will be live at `https://your-app.vercel.app`
+### Current dashboard capabilities
+- sign in with `ADMIN_TOKEN`
+- update forwarding number
+- update keyword filters
+- pause/resume forwarding
+- review message stats
+- review recent message logs
 
-### Pages
-| URL | Description |
-|-----|-------------|
-| `/` | Dashboard with stats and recent messages |
-| `/messages` | Full paginated message history |
-| `/settings` | Update forwarding phone number |
+### Important limitation
+
+This dashboard is for a **single deployment admin**. It is not yet a multi-user SaaS portal where customers create their own accounts.
+
+That SaaS direction is documented under:
+- `docs/WEB_PRODUCT_FLOW.md`
+- `docs/MVP_REQUIREMENTS.md`
+- `docs/IMPLEMENTATION_ROADMAP.md`
 
 
 > ⚠️ Setting `WHATSAPP_APP_SECRET` is **strongly recommended** for production to prevent spoofed webhook payloads.

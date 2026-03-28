@@ -1,14 +1,16 @@
 import { Router } from 'express';
-import { updateForwardToNumber } from '../controllers/configController';
+import {
+  getSettings,
+  updateForwardToNumber,
+  updateSettings,
+} from '../controllers/configController';
+import { requireAdminToken } from '../middleware/adminAuth';
 import { configRateLimiter } from '../middleware/rateLimiter';
 
 const router = Router();
 
-/**
- * PATCH /config/forward-number
- * Updates the phone number to forward messages to.
- * Body: { "phoneNumber": "12345678900", "adminToken": "your_admin_token" }
- */
-router.patch('/forward-number', configRateLimiter, updateForwardToNumber);
+router.get('/settings', configRateLimiter, requireAdminToken, getSettings);
+router.patch('/settings', configRateLimiter, requireAdminToken, updateSettings);
+router.patch('/forward-number', configRateLimiter, requireAdminToken, updateForwardToNumber);
 
 export default router;
