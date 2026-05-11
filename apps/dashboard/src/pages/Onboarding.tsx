@@ -85,6 +85,10 @@ export default function Onboarding() {
   const [forwardToNumber, setForwardToNumber] = useState(workspace?.forwardToNumber ?? '');
   const [keywordFilters, setKeywordFilters] = useState(workspace?.keywordFilters.join(', ') ?? '');
   const [forwardingEnabled, setForwardingEnabled] = useState(workspace?.forwardingEnabled ?? true);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [extraRecipients, setExtraRecipients] = useState<string[]>(workspace?.extraRecipients ?? []);
+  const [webhookRelayUrl, setWebhookRelayUrl] = useState(workspace?.webhookRelayUrl ?? '');
+  const [emailForwardTo, setEmailForwardTo] = useState(workspace?.emailForwardTo ?? '');
 
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -97,6 +101,9 @@ export default function Onboarding() {
     setForwardToNumber(workspace.forwardToNumber);
     setKeywordFilters(workspace.keywordFilters.join(', '));
     setForwardingEnabled(workspace.forwardingEnabled);
+    setExtraRecipients(workspace.extraRecipients);
+    setWebhookRelayUrl(workspace.webhookRelayUrl);
+    setEmailForwardTo(workspace.emailForwardTo);
   }, [workspace]);
 
   function handleStep1(event: FormEvent<HTMLFormElement>) {
@@ -116,8 +123,11 @@ export default function Onboarding() {
       accessToken,
       appSecret,
       forwardToNumber,
+      extraRecipients: extraRecipients.map((n) => n.trim()).filter(Boolean),
       keywordFilters,
       forwardingEnabled,
+      webhookRelayUrl: webhookRelayUrl.trim(),
+      emailForwardTo: emailForwardTo.trim(),
     });
     setSaving(false);
     if (!result.ok) {
@@ -318,6 +328,91 @@ export default function Onboarding() {
                 />
                 Start with forwarding enabled
               </label>
+
+              <button
+                type="button"
+                onClick={() => setShowAdvanced((v) => !v)}
+                className="text-sm font-semibold text-emerald-700 hover:underline"
+              >
+                {showAdvanced ? '− Hide advanced destinations' : '+ Add more destinations (optional)'}
+              </button>
+
+              {showAdvanced && (
+                <div className="space-y-4 rounded-2xl border border-stone-200 bg-stone-50/60 p-4">
+                  <div>
+                    <span className="mb-2 block text-sm font-semibold text-stone-700">
+                      Extra WhatsApp numbers
+                    </span>
+                    <div className="space-y-2">
+                      {extraRecipients.map((value, index) => (
+                        <div key={index} className="flex gap-2">
+                          <input
+                            className="flex-1 rounded-2xl border border-stone-300 bg-white px-4 py-3 outline-none focus:border-emerald-600"
+                            value={value}
+                            onChange={(e) =>
+                              setExtraRecipients((prev) =>
+                                prev.map((item, i) => (i === index ? e.target.value : item)),
+                              )
+                            }
+                            placeholder="15551234567"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExtraRecipients((prev) => prev.filter((_, i) => i !== index))
+                            }
+                            className="rounded-full border border-stone-300 px-3 py-2 text-xs font-semibold text-stone-700 transition hover:border-rose-300 hover:text-rose-600"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setExtraRecipients((prev) => [...prev, ''])}
+                      className="mt-2 rounded-full border border-emerald-700 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-50"
+                    >
+                      + Add another number
+                    </button>
+                    <span className="mt-2 block text-xs text-stone-500">
+                      Fan out every inbound message to multiple WhatsApp numbers in parallel.
+                    </span>
+                  </div>
+
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-semibold text-stone-700">
+                      Webhook relay URL
+                    </span>
+                    <input
+                      type="url"
+                      className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 outline-none focus:border-emerald-600"
+                      value={webhookRelayUrl}
+                      onChange={(e) => setWebhookRelayUrl(e.target.value)}
+                      placeholder="https://your-app.com/incoming"
+                    />
+                    <span className="mt-1.5 block text-xs text-stone-500">
+                      POSTs inbound messages as JSON to your URL — pipe into any backend or CRM.
+                    </span>
+                  </label>
+
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-semibold text-stone-700">
+                      Email forwarding address
+                    </span>
+                    <input
+                      type="email"
+                      className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 outline-none focus:border-emerald-600"
+                      value={emailForwardTo}
+                      onChange={(e) => setEmailForwardTo(e.target.value)}
+                      placeholder="you@example.com"
+                    />
+                    <span className="mt-1.5 block text-xs text-stone-500">
+                      Receive each forwarded message in your inbox.
+                    </span>
+                  </label>
+                </div>
+              )}
 
               {error ? (
                 <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">

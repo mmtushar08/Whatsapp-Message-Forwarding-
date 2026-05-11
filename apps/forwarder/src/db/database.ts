@@ -102,8 +102,17 @@ export function initDatabase(): void {
   }
 
   const workspaceColumns = db.prepare(`PRAGMA table_info(workspaces)`).all() as Array<{ name: string }>;
-  if (!workspaceColumns.some((column) => column.name === 'app_secret_encrypted')) {
+  if (!workspaceColumns.some((c) => c.name === 'app_secret_encrypted')) {
     db.exec(`ALTER TABLE workspaces ADD COLUMN app_secret_encrypted TEXT`);
+  }
+  if (!workspaceColumns.some((c) => c.name === 'extra_recipients')) {
+    db.exec(`ALTER TABLE workspaces ADD COLUMN extra_recipients TEXT NOT NULL DEFAULT ''`);
+  }
+  if (!workspaceColumns.some((c) => c.name === 'webhook_relay_url')) {
+    db.exec(`ALTER TABLE workspaces ADD COLUMN webhook_relay_url TEXT NOT NULL DEFAULT ''`);
+  }
+  if (!workspaceColumns.some((c) => c.name === 'email_forward_to')) {
+    db.exec(`ALTER TABLE workspaces ADD COLUMN email_forward_to TEXT NOT NULL DEFAULT ''`);
   }
 }
 

@@ -14,10 +14,13 @@ export interface WorkspaceSetup {
   accessTokenPreview: string;
   appSecretConfigured: boolean;
   forwardToNumber: string;
+  extraRecipients: string[];
   keywordFilters: string[];
   forwardingEnabled: boolean;
   webhookVerifyToken: string;
   webhookUrl: string;
+  webhookRelayUrl: string;
+  emailForwardTo: string;
   status: 'needs_webhook_setup' | 'connected';
   updatedAt: string;
 }
@@ -29,8 +32,11 @@ export interface WorkspaceSettingsInput {
   accessToken: string;
   appSecret: string;
   forwardToNumber: string;
+  extraRecipients: string[];
   keywordFilters: string;
   forwardingEnabled: boolean;
+  webhookRelayUrl: string;
+  emailForwardTo: string;
 }
 
 export interface PrototypeMessageLog {

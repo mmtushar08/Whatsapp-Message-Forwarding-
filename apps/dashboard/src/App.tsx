@@ -7,6 +7,7 @@ import Messages from './pages/Messages';
 import Onboarding from './pages/Onboarding';
 import Settings from './pages/Settings';
 import NotFound from './pages/NotFound';
+import Pricing from './pages/Pricing';
 import Signup from './pages/Signup';
 import Welcome from './pages/Welcome';
 
@@ -59,6 +60,7 @@ function PublicRoutes() {
     <Routes>
       <Route path="/" element={<Welcome />} />
       <Route path="/welcome" element={<Navigate to="/" replace />} />
+      <Route path="/pricing" element={<Pricing />} />
       <Route
         path="/signup"
         element={currentUser ? <Navigate to={workspace ? '/app' : '/onboarding'} replace /> : <Signup />}

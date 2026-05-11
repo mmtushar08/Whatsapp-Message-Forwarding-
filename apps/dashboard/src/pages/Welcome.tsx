@@ -24,6 +24,12 @@ export default function Welcome() {
                 Create Account
               </Link>
               <Link
+                to="/pricing"
+                className="rounded-full border border-stone-300 bg-white px-5 py-3 text-sm font-semibold text-stone-900 transition hover:border-stone-400"
+              >
+                See pricing
+              </Link>
+              <Link
                 to="/login"
                 className="rounded-full border border-stone-300 bg-white px-5 py-3 text-sm font-semibold text-stone-900 transition hover:border-stone-400"
               >

@@ -21,6 +21,30 @@ function normalizePhoneNumber(value: string): string {
   return cleaned;
 }
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function validateOptionalUrl(value: string, label: string): string {
+  if (!value) return '';
+  if (!/^https?:\/\//i.test(value)) {
+    throw new Error(`${label} must start with http:// or https://`);
+  }
+  return value.trim();
+}
+
+function validateOptionalEmail(value: string): string {
+  if (!value) return '';
+  if (!EMAIL_REGEX.test(value)) {
+    throw new Error('Email forwarding address is not a valid email.');
+  }
+  return value.trim();
+}
+
+function parseExtraRecipients(value: string[] | string | undefined): string[] {
+  if (!value) return [];
+  const raw = Array.isArray(value) ? value : value.split(',');
+  return raw.map((v) => v.trim()).filter(Boolean).map(normalizePhoneNumber);
+}
+
 async function validateWhatsappCredentials(phoneNumberId: string, accessToken: string): Promise<void> {
   try {
     await axios.get(`${GRAPH_API_URL}/${phoneNumberId}`, {
@@ -68,8 +92,11 @@ export async function saveWorkspace(req: Request, res: Response): Promise<void> 
     accessToken,
     appSecret,
     forwardToNumber,
+    extraRecipients,
     keywordFilters,
     forwardingEnabled,
+    webhookRelayUrl,
+    emailForwardTo,
   } = req.body as {
     businessLabel?: string;
     sourcePhoneNumber?: string;
@@ -77,8 +104,11 @@ export async function saveWorkspace(req: Request, res: Response): Promise<void> 
     accessToken?: string;
     appSecret?: string;
     forwardToNumber?: string;
+    extraRecipients?: string[] | string;
     keywordFilters?: string[] | string;
     forwardingEnabled?: boolean;
+    webhookRelayUrl?: string;
+    emailForwardTo?: string;
   };
 
   if (!businessLabel || !sourcePhoneNumber || !phoneNumberId || !forwardToNumber) {
@@ -114,6 +144,10 @@ export async function saveWorkspace(req: Request, res: Response): Promise<void> 
         ? keywordFilters.split(',').map((value) => value.trim()).filter(Boolean)
         : [];
 
+    const normalizedExtras = parseExtraRecipients(extraRecipients);
+    const validatedRelayUrl = validateOptionalUrl(webhookRelayUrl?.trim() ?? '', 'Webhook relay URL');
+    const validatedEmail = validateOptionalEmail(emailForwardTo?.trim() ?? '');
+
     const workspace = upsertWorkspace(req.auth.userId, {
       businessLabel: businessLabel.trim(),
       sourcePhoneNumber: normalizePhoneNumber(sourcePhoneNumber),
@@ -121,8 +155,11 @@ export async function saveWorkspace(req: Request, res: Response): Promise<void> 
       accessToken: tokenToValidate,
       appSecret: appSecret?.trim(),
       forwardToNumber: normalizePhoneNumber(forwardToNumber),
+      extraRecipients: normalizedExtras,
       keywordFilters: normalizedFilters,
       forwardingEnabled: forwardingEnabled ?? true,
+      webhookRelayUrl: validatedRelayUrl,
+      emailForwardTo: validatedEmail,
       webhookBaseUrl: deriveWebhookBaseUrl(req),
     });
 
