@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import { ProductProvider, useProduct } from './context/ProductContext';
+import Billing from './pages/Billing';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import Messages from './pages/Messages';
@@ -38,6 +39,7 @@ function ProtectedAppShell() {
           <Route path="/app" element={<Dashboard />} />
           <Route path="/app/messages" element={<Messages />} />
           <Route path="/app/settings" element={<Settings />} />
+          <Route path="/app/billing" element={<Billing />} />
           <Route path="*" element={<Navigate to="/app" replace />} />
         </Routes>
       </main>

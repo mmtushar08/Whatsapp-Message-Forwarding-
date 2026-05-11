@@ -1,8 +1,10 @@
 import axios, { AxiosError } from 'axios';
 import { Request, Response } from 'express';
 import config from '../config';
+import { getUserById } from '../db/userStore';
 import { getWorkspaceByUserId, upsertWorkspace } from '../db/workspaceStore';
 import logger from '../services/loggerService';
+import { validatePlanFeatures } from '../services/planService';
 
 const GRAPH_API_URL = 'https://graph.facebook.com/v18.0';
 
@@ -147,6 +149,22 @@ export async function saveWorkspace(req: Request, res: Response): Promise<void> 
     const normalizedExtras = parseExtraRecipients(extraRecipients);
     const validatedRelayUrl = validateOptionalUrl(webhookRelayUrl?.trim() ?? '', 'Webhook relay URL');
     const validatedEmail = validateOptionalEmail(emailForwardTo?.trim() ?? '');
+
+    const user = getUserById(req.auth.userId);
+    const userPlan = user?.plan ?? 'free';
+    const planError = validatePlanFeatures(userPlan, {
+      extraRecipients: normalizedExtras,
+      webhookRelayUrl: validatedRelayUrl,
+      emailForwardTo: validatedEmail,
+    });
+    if (planError) {
+      res.status(402).json({
+        error: planError.message,
+        field: planError.field,
+        requiredPlan: planError.requiredPlan,
+      });
+      return;
+    }
 
     const workspace = upsertWorkspace(req.auth.userId, {
       businessLabel: businessLabel.trim(),

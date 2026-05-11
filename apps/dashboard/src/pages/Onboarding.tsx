@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { fetchSmtpStatus } from '../api/client';
 import { useProduct } from '../context/ProductContext';
 
 const STEPS = [
@@ -90,8 +91,13 @@ export default function Onboarding() {
   const [webhookRelayUrl, setWebhookRelayUrl] = useState(workspace?.webhookRelayUrl ?? '');
   const [emailForwardTo, setEmailForwardTo] = useState(workspace?.emailForwardTo ?? '');
 
+  const [smtpConfigured, setSmtpConfigured] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetchSmtpStatus().then((s) => setSmtpConfigured(s.smtpConfigured));
+  }, []);
 
   useEffect(() => {
     if (!workspace) return;
@@ -410,6 +416,12 @@ export default function Onboarding() {
                     <span className="mt-1.5 block text-xs text-stone-500">
                       Receive each forwarded message in your inbox.
                     </span>
+                    {emailForwardTo.trim() && smtpConfigured === false && (
+                      <div className="mt-2 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+                        Email delivery is not configured on this server yet — emails won't be sent
+                        until the administrator sets SMTP credentials.
+                      </div>
+                    )}
                   </label>
                 </div>
               )}

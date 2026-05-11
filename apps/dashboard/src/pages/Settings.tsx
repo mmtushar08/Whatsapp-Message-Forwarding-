@@ -1,8 +1,30 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { fetchSmtpStatus } from '../api/client';
 import { useProduct } from '../context/ProductContext';
+import { PLAN_CAPABILITIES } from '../types';
+
+function UpgradePrompt({ requiredPlan, feature }: { requiredPlan: string; feature: string }) {
+  return (
+    <div className="mt-2 flex items-start gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-800">
+      <span>🔒</span>
+      <div className="flex-1">
+        <strong>{feature}</strong> is available on <strong>{requiredPlan}</strong> and above.{' '}
+        <Link to="/pricing" className="font-semibold underline">
+          See pricing →
+        </Link>
+      </div>
+    </div>
+  );
+}
 
 export default function Settings() {
-  const { workspace, saveWorkspace } = useProduct();
+  const { workspace, saveWorkspace, currentUser } = useProduct();
+  const plan = currentUser?.plan ?? 'free';
+  const caps = PLAN_CAPABILITIES[plan];
+  const canAddMoreDestinations = caps.maxDestinations > 1;
+  const canUseWebhookRelay = caps.webhookRelay;
+  const canUseEmailForward = caps.emailForward;
   const [businessLabel, setBusinessLabel] = useState(workspace?.businessLabel ?? '');
   const [sourcePhoneNumber, setSourcePhoneNumber] = useState(workspace?.sourcePhoneNumber ?? '');
   const [phoneNumberId, setPhoneNumberId] = useState(workspace?.phoneNumberId ?? '');
@@ -14,9 +36,14 @@ export default function Settings() {
   const [forwardingEnabled, setForwardingEnabled] = useState(workspace?.forwardingEnabled ?? true);
   const [webhookRelayUrl, setWebhookRelayUrl] = useState(workspace?.webhookRelayUrl ?? '');
   const [emailForwardTo, setEmailForwardTo] = useState(workspace?.emailForwardTo ?? '');
+  const [smtpConfigured, setSmtpConfigured] = useState<boolean | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetchSmtpStatus().then((s) => setSmtpConfigured(s.smtpConfigured));
+  }, []);
 
   if (!workspace) {
     return null;
@@ -179,16 +206,22 @@ export default function Settings() {
                   </div>
                 ))}
               </div>
-              <button
-                type="button"
-                onClick={addExtra}
-                className="mt-3 rounded-full border border-emerald-700 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
-              >
-                + Add another number
-              </button>
-              <span className="mt-2 block text-xs text-stone-400">
-                Every inbound message is sent to every destination in parallel.
-              </span>
+              {canAddMoreDestinations ? (
+                <button
+                  type="button"
+                  onClick={addExtra}
+                  className="mt-3 rounded-full border border-emerald-700 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50"
+                >
+                  + Add another number
+                </button>
+              ) : (
+                <UpgradePrompt requiredPlan="Pro" feature="Multi-destination fan-out" />
+              )}
+              {canAddMoreDestinations && (
+                <span className="mt-2 block text-xs text-stone-400">
+                  Every inbound message is sent to every destination in parallel.
+                </span>
+              )}
             </div>
 
             <label className="block">
@@ -198,15 +231,20 @@ export default function Settings() {
               </span>
               <input
                 type="url"
-                className="w-full rounded-2xl border border-stone-300 px-4 py-3 outline-none focus:border-emerald-600"
-                value={webhookRelayUrl}
+                disabled={!canUseWebhookRelay}
+                className="w-full rounded-2xl border border-stone-300 px-4 py-3 outline-none focus:border-emerald-600 disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-400"
+                value={canUseWebhookRelay ? webhookRelayUrl : ''}
                 onChange={(e) => setWebhookRelayUrl(e.target.value)}
                 placeholder="https://your-app.com/incoming"
               />
-              <span className="mt-1.5 block text-xs text-stone-400">
-                POSTs a JSON payload of every inbound message to your URL. Use this to pipe
-                messages into your own backend, CRM, or automation tool.
-              </span>
+              {canUseWebhookRelay ? (
+                <span className="mt-1.5 block text-xs text-stone-400">
+                  POSTs a JSON payload of every inbound message to your URL. Use this to pipe
+                  messages into your own backend, CRM, or automation tool.
+                </span>
+              ) : (
+                <UpgradePrompt requiredPlan="Pro" feature="Webhook relay" />
+              )}
             </label>
 
             <label className="block">
@@ -216,14 +254,26 @@ export default function Settings() {
               </span>
               <input
                 type="email"
-                className="w-full rounded-2xl border border-stone-300 px-4 py-3 outline-none focus:border-emerald-600"
-                value={emailForwardTo}
+                disabled={!canUseEmailForward}
+                className="w-full rounded-2xl border border-stone-300 px-4 py-3 outline-none focus:border-emerald-600 disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-400"
+                value={canUseEmailForward ? emailForwardTo : ''}
                 onChange={(e) => setEmailForwardTo(e.target.value)}
                 placeholder="you@example.com"
               />
-              <span className="mt-1.5 block text-xs text-stone-400">
-                Sends each forwarded message as an email — useful as a backup or for offline review.
-              </span>
+              {canUseEmailForward ? (
+                <span className="mt-1.5 block text-xs text-stone-400">
+                  Sends each forwarded message as an email — useful as a backup or for offline review.
+                </span>
+              ) : (
+                <UpgradePrompt requiredPlan="Starter" feature="Email forwarding" />
+              )}
+              {canUseEmailForward && emailForwardTo.trim() && smtpConfigured === false && (
+                <div className="mt-2 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+                  <strong>Email delivery is currently disabled.</strong> The server hasn't been
+                  configured with SMTP credentials, so emails to <code>{emailForwardTo.trim()}</code> won't be sent.
+                  Please contact your administrator.
+                </div>
+              )}
             </label>
           </div>
         </section>

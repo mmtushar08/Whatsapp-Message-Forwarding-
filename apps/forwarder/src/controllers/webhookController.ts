@@ -13,6 +13,9 @@ import logger from '../services/loggerService';
 import { forwardToMultiple } from '../services/whatsappService';
 import { sendForwardEmail } from '../services/emailService';
 import { relayToWebhook } from '../services/webhookRelayService';
+import { getLimits } from '../services/planService';
+import { getUserById } from '../db/userStore';
+import { getCurrentMonthUsage, incrementUsage } from '../db/usageStore';
 import { WebhookPayload } from '../types/whatsapp';
 import { extractMessages } from '../utils/messageParser';
 
@@ -106,6 +109,21 @@ export async function receiveWebhook(req: Request, res: Response): Promise<void>
       continue;
     }
 
+    // Free-tier monthly cap enforcement
+    if (workspace) {
+      const owner = getUserById(workspace.userId);
+      const limits = getLimits(owner?.plan ?? 'free');
+      if (limits.monthlyMessages !== -1) {
+        const used = getCurrentMonthUsage(workspace.id);
+        if (used >= limits.monthlyMessages) {
+          logger.warn(
+            `Workspace ${workspace.id} (plan: ${owner?.plan ?? 'free'}) exceeded monthly cap of ${limits.monthlyMessages}. Skipping message.`,
+          );
+          continue;
+        }
+      }
+    }
+
     try {
       const recipients = workspace
         ? [workspace.forwardToNumber, ...workspace.extraRecipients].filter(Boolean)
@@ -142,6 +160,11 @@ export async function receiveWebhook(req: Request, res: Response): Promise<void>
           error,
         });
       });
+
+      // Count one usage event per inbound message (not per recipient) — simpler mental model for users.
+      if (workspace && results.some((r) => r.success)) {
+        incrementUsage(workspace.id);
+      }
 
       if (workspace) {
         const sideEffects: Promise<unknown>[] = [];

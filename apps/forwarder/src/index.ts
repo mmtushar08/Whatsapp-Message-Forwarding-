@@ -3,10 +3,12 @@ import express, { Request } from 'express';
 import path from 'path';
 import config from './config';
 import { getDatabase, initDatabase } from './db/database';
+import { isEmailConfigured } from './services/emailService';
 import logger from './services/loggerService';
 import { requestIdMiddleware } from './middleware/requestId';
 import appRouter from './routes/app';
 import authRouter from './routes/auth';
+import billingRouter from './routes/billing';
 import configRouter from './routes/config';
 import docsRouter from './routes/docs';
 import messagesRouter from './routes/messages';
@@ -51,6 +53,10 @@ app.get('/health', (_req, res) => {
   }
 });
 
+app.get('/health/smtp', (_req, res) => {
+  res.json({ smtpConfigured: isEmailConfigured() });
+});
+
 app.use(express.static(publicDir));
 
 app.get('/', (_req, res) => {
@@ -60,6 +66,7 @@ app.get('/', (_req, res) => {
 app.use('/webhook', webhookRouter);
 app.use('/auth', authRouter);
 app.use('/app', appRouter);
+app.use('/billing', billingRouter);
 app.use('/config', configRouter);
 app.use('/messages', messagesRouter);
 app.use('/docs', docsRouter);

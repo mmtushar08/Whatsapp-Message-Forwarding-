@@ -59,6 +59,7 @@ export interface WorkspaceInput {
 
 export interface WorkspaceRuntime {
   id: string;
+  userId: string;
   businessLabel: string;
   sourcePhoneNumber: string;
   phoneNumberId: string;
@@ -103,6 +104,7 @@ function toWorkspaceView(record: WorkspaceRecord): WorkspaceView {
 function toWorkspaceRuntime(record: WorkspaceRecord): WorkspaceRuntime {
   return {
     id: record.id,
+    userId: record.user_id,
     businessLabel: record.business_label,
     sourcePhoneNumber: record.source_phone_number,
     phoneNumberId: record.phone_number_id,

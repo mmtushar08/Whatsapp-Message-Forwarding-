@@ -35,6 +35,9 @@ export default function Navbar() {
           <NavLink to="/app/settings" className={navLinkClass}>
             Settings
           </NavLink>
+          <NavLink to="/app/billing" className={navLinkClass}>
+            Billing
+          </NavLink>
         </div>
 
         <div className="flex items-center gap-3">
