@@ -2,11 +2,14 @@ import path from 'path';
 import winston from 'winston';
 import DailyRotateFile from 'winston-daily-rotate-file';
 import config from '../config';
+import { getRequestId } from '../middleware/requestId';
 
 const { combine, timestamp, printf, colorize, errors } = winston.format;
 
 const logFormat = printf(({ level, message, timestamp: ts, stack }) => {
-  return `${ts} [${level}]: ${stack ?? message}`;
+  const reqId = getRequestId();
+  const prefix = reqId ? `[${reqId.slice(0, 8)}] ` : '';
+  return `${ts} [${level}]: ${prefix}${stack ?? message}`;
 });
 
 const logger = winston.createLogger({

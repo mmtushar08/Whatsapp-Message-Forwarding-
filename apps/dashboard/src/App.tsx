@@ -6,6 +6,7 @@ import Login from './pages/Login';
 import Messages from './pages/Messages';
 import Onboarding from './pages/Onboarding';
 import Settings from './pages/Settings';
+import NotFound from './pages/NotFound';
 import Signup from './pages/Signup';
 import Welcome from './pages/Welcome';
 
@@ -70,7 +71,9 @@ function PublicRoutes() {
         path="/onboarding"
         element={currentUser ? <Onboarding /> : <Navigate to="/login" replace />}
       />
-      <Route path="/*" element={<ProtectedAppShell />} />
+      <Route path="/app" element={<ProtectedAppShell />} />
+      <Route path="/app/*" element={<ProtectedAppShell />} />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }

@@ -4,6 +4,7 @@ import path from 'path';
 import config from './config';
 import { getDatabase, initDatabase } from './db/database';
 import logger from './services/loggerService';
+import { requestIdMiddleware } from './middleware/requestId';
 import appRouter from './routes/app';
 import authRouter from './routes/auth';
 import configRouter from './routes/config';
@@ -21,6 +22,8 @@ if (corsOrigin === '*') {
   }
   logger.warn('CORS_ORIGIN is not set - allowing all origins. Set CORS_ORIGIN in production.');
 }
+
+app.use(requestIdMiddleware);
 
 app.use(
   cors({
