@@ -41,7 +41,7 @@ export default function Settings() {
       return;
     }
 
-    setSaved('Workspace settings saved through the backend.');
+    setSaved('Workspace settings saved successfully.');
   }
 
   return (

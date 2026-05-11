@@ -32,8 +32,7 @@ export default function Signup() {
         </p>
         <h1 className="mt-4 text-3xl font-bold tracking-tight text-stone-900">Create your account</h1>
         <p className="mt-3 text-sm text-stone-600">
-          This account is now created through the real backend foundation. The full multi-tenant
-          message flow is still being wired, but auth and workspace persistence are server-backed.
+          Create your account to start managing WhatsApp message forwarding from the browser.
         </p>
 
         <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
