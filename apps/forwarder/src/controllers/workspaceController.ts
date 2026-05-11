@@ -1,5 +1,13 @@
 import { Request, Response } from 'express';
+import config from '../config';
 import { getWorkspaceByUserId, upsertWorkspace } from '../db/workspaceStore';
+
+function deriveWebhookBaseUrl(req: Request): string {
+  if (config.publicAppUrl) return config.publicAppUrl.replace(/\/$/, '');
+  const proto = (req.headers['x-forwarded-proto'] as string | undefined) ?? req.protocol;
+  const host = (req.headers['x-forwarded-host'] as string | undefined) ?? req.get('host') ?? 'localhost:3000';
+  return `${proto}://${host}`;
+}
 
 function normalizePhoneNumber(value: string): string {
   const cleaned = value.replace(/\D/g, '');
@@ -74,6 +82,7 @@ export function saveWorkspace(req: Request, res: Response): void {
       forwardToNumber: normalizePhoneNumber(forwardToNumber),
       keywordFilters: normalizedFilters,
       forwardingEnabled: forwardingEnabled ?? true,
+      webhookBaseUrl: deriveWebhookBaseUrl(req),
     });
 
     res.status(200).json({ workspace });

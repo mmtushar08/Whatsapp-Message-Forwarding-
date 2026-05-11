@@ -45,6 +45,7 @@ export interface WorkspaceInput {
   forwardToNumber: string;
   keywordFilters: string[];
   forwardingEnabled: boolean;
+  webhookBaseUrl?: string;
 }
 
 export interface WorkspaceRuntime {
@@ -120,9 +121,8 @@ export function upsertWorkspace(userId: string, input: WorkspaceInput): Workspac
   const timestamp = new Date().toISOString();
   const workspaceId = existing?.id ?? createId('workspace');
   const verifyToken = existing?.webhook_verify_token ?? createId('verify');
-  const webhookUrl =
-    existing?.webhook_url ??
-    `${(process.env['PUBLIC_APP_URL'] ?? 'https://your-domain.com').replace(/\/$/, '')}/webhook`;
+  const baseUrl = (input.webhookBaseUrl ?? process.env['PUBLIC_APP_URL'] ?? '').replace(/\/$/, '');
+  const webhookUrl = existing?.webhook_url ?? `${baseUrl || 'https://your-domain.com'}/webhook`;
   const encryptedAccessToken =
     input.accessToken && input.accessToken.trim().length > 0
       ? encryptSecret(input.accessToken.trim())

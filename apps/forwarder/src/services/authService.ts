@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import config from '../config';
 
 const SESSION_TTL_HOURS = parseInt(process.env['SESSION_TTL_HOURS'] ?? '24', 10);
 
@@ -32,13 +33,7 @@ export function createSessionToken(): { plainToken: string; tokenHash: string; e
 }
 
 function getEncryptionKey(): Buffer {
-  const source =
-    process.env['APP_ENCRYPTION_KEY'] ??
-    process.env['ADMIN_TOKEN'] ??
-    process.env['WEBHOOK_VERIFY_TOKEN'] ??
-    'local-dev-encryption-key';
-
-  return crypto.createHash('sha256').update(source).digest();
+  return crypto.createHash('sha256').update(config.appEncryptionKey).digest();
 }
 
 export function encryptSecret(value: string): string {

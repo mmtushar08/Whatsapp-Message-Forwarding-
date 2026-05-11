@@ -1,20 +1,18 @@
 import path from 'path';
 import winston from 'winston';
+import DailyRotateFile from 'winston-daily-rotate-file';
 import config from '../config';
 
 const { combine, timestamp, printf, colorize, errors } = winston.format;
 
-/** Custom log format */
 const logFormat = printf(({ level, message, timestamp: ts, stack }) => {
   return `${ts} [${level}]: ${stack ?? message}`;
 });
 
-/** Winston logger instance used throughout the application */
 const logger = winston.createLogger({
   level: config.logLevel,
   format: combine(timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }), errors({ stack: true }), logFormat),
   transports: [
-    // Console transport with colors
     new winston.transports.Console({
       format: combine(
         colorize(),
@@ -23,9 +21,13 @@ const logger = winston.createLogger({
         logFormat,
       ),
     }),
-    // File transport — writes structured JSON logs
-    new winston.transports.File({
-      filename: path.resolve(process.cwd(), 'logs/app.log'),
+    new DailyRotateFile({
+      dirname: path.resolve(process.cwd(), 'logs'),
+      filename: 'app-%DATE%.log',
+      datePattern: 'YYYY-MM-DD',
+      maxSize: '20m',
+      maxFiles: '14d',
+      zippedArchive: true,
       format: combine(
         timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
         errors({ stack: true }),

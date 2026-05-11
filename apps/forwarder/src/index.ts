@@ -2,7 +2,7 @@ import cors from 'cors';
 import express, { Request } from 'express';
 import path from 'path';
 import config from './config';
-import { initDatabase } from './db/database';
+import { getDatabase, initDatabase } from './db/database';
 import logger from './services/loggerService';
 import appRouter from './routes/app';
 import authRouter from './routes/auth';
@@ -11,13 +11,14 @@ import docsRouter from './routes/docs';
 import messagesRouter from './routes/messages';
 import webhookRouter from './routes/webhook';
 
-initDatabase();
-
 const app = express();
 const publicDir = path.resolve(__dirname, 'public');
 const corsOrigin = process.env['CORS_ORIGIN'] ?? '*';
 
 if (corsOrigin === '*') {
+  if (process.env['NODE_ENV'] === 'production') {
+    throw new Error('CORS_ORIGIN must be set to a specific origin in production. Set CORS_ORIGIN in your environment.');
+  }
   logger.warn('CORS_ORIGIN is not set - allowing all origins. Set CORS_ORIGIN in production.');
 }
 
@@ -25,11 +26,13 @@ app.use(
   cors({
     origin: corsOrigin,
     methods: ['GET', 'POST', 'PATCH'],
+    credentials: true,
   }),
 );
 
 app.use(
   express.json({
+    limit: '100kb',
     verify: (req: Request, _res, buf) => {
       req.rawBody = buf;
     },
@@ -37,7 +40,12 @@ app.use(
 );
 
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  try {
+    getDatabase().prepare('SELECT 1').get();
+    res.json({ status: 'ok', db: 'ok', timestamp: new Date().toISOString() });
+  } catch {
+    res.status(503).json({ status: 'error', db: 'unreachable', timestamp: new Date().toISOString() });
+  }
 });
 
 app.use(express.static(publicDir));
@@ -59,7 +67,7 @@ app.use((_req, res) => {
 
 if (require.main === module) {
   initDatabase();
-  app.listen(config.port, () => {
+  const server = app.listen(config.port, () => {
     logger.info(`WhatsApp Forwarder started on port ${config.port}`);
     logger.info(`Dashboard: http://localhost:${config.port}/`);
     logger.info(`Auth API: http://localhost:${config.port}/auth`);
@@ -69,6 +77,21 @@ if (require.main === module) {
     logger.info(`Messages API: http://localhost:${config.port}/messages`);
     logger.info(`API Docs: http://localhost:${config.port}/docs`);
   });
+
+  function gracefulShutdown(signal: string) {
+    logger.info(`Received ${signal}. Closing HTTP server...`);
+    server.close(() => {
+      logger.info('HTTP server closed. Exiting.');
+      process.exit(0);
+    });
+    setTimeout(() => {
+      logger.warn('Forced shutdown after timeout.');
+      process.exit(1);
+    }, 10_000).unref();
+  }
+
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 }
 
 export default app;
