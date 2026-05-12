@@ -16,6 +16,16 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan for secrets
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --only-verified
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -43,4 +53,5 @@ jobs:
           FORWARD_TO_NUMBER: '9876543210'
           WEBHOOK_VERIFY_TOKEN: test_verify_token
           ADMIN_TOKEN: test_admin_token
+          APP_ENCRYPTION_KEY: a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2
           LOG_LEVEL: silent

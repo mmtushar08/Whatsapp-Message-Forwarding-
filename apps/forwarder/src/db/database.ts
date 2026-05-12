@@ -54,8 +54,22 @@ export function initDatabase(): void {
       name TEXT NOT NULL,
       email TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
+      plan TEXT NOT NULL DEFAULT 'free',
+      razorpay_customer_id TEXT NOT NULL DEFAULT '',
+      razorpay_subscription_id TEXT NOT NULL DEFAULT '',
+      plan_started_at TEXT NOT NULL DEFAULT '',
+      plan_expires_at TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS usage_counters (
+      workspace_id TEXT NOT NULL,
+      year_month TEXT NOT NULL,
+      message_count INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (workspace_id, year_month)
     )
   `);
 
@@ -102,8 +116,34 @@ export function initDatabase(): void {
   }
 
   const workspaceColumns = db.prepare(`PRAGMA table_info(workspaces)`).all() as Array<{ name: string }>;
-  if (!workspaceColumns.some((column) => column.name === 'app_secret_encrypted')) {
+  if (!workspaceColumns.some((c) => c.name === 'app_secret_encrypted')) {
     db.exec(`ALTER TABLE workspaces ADD COLUMN app_secret_encrypted TEXT`);
+  }
+  if (!workspaceColumns.some((c) => c.name === 'extra_recipients')) {
+    db.exec(`ALTER TABLE workspaces ADD COLUMN extra_recipients TEXT NOT NULL DEFAULT ''`);
+  }
+  if (!workspaceColumns.some((c) => c.name === 'webhook_relay_url')) {
+    db.exec(`ALTER TABLE workspaces ADD COLUMN webhook_relay_url TEXT NOT NULL DEFAULT ''`);
+  }
+  if (!workspaceColumns.some((c) => c.name === 'email_forward_to')) {
+    db.exec(`ALTER TABLE workspaces ADD COLUMN email_forward_to TEXT NOT NULL DEFAULT ''`);
+  }
+
+  const userColumns = db.prepare(`PRAGMA table_info(users)`).all() as Array<{ name: string }>;
+  if (!userColumns.some((c) => c.name === 'plan')) {
+    db.exec(`ALTER TABLE users ADD COLUMN plan TEXT NOT NULL DEFAULT 'free'`);
+  }
+  if (!userColumns.some((c) => c.name === 'razorpay_customer_id')) {
+    db.exec(`ALTER TABLE users ADD COLUMN razorpay_customer_id TEXT NOT NULL DEFAULT ''`);
+  }
+  if (!userColumns.some((c) => c.name === 'razorpay_subscription_id')) {
+    db.exec(`ALTER TABLE users ADD COLUMN razorpay_subscription_id TEXT NOT NULL DEFAULT ''`);
+  }
+  if (!userColumns.some((c) => c.name === 'plan_started_at')) {
+    db.exec(`ALTER TABLE users ADD COLUMN plan_started_at TEXT NOT NULL DEFAULT ''`);
+  }
+  if (!userColumns.some((c) => c.name === 'plan_expires_at')) {
+    db.exec(`ALTER TABLE users ADD COLUMN plan_expires_at TEXT NOT NULL DEFAULT ''`);
   }
 }
 

@@ -31,8 +31,7 @@ export default function Login() {
         </p>
         <h1 className="mt-4 text-3xl font-bold tracking-tight text-stone-900">Log in to manage forwarding</h1>
         <p className="mt-3 text-sm text-stone-600">
-          Sign in through the new backend auth layer. Session state is now backed by the API, not
-          by browser-only mock accounts.
+          Sign in to manage your WhatsApp forwarding rules and message logs.
         </p>
 
         <form className="mt-8 space-y-4" onSubmit={handleSubmit}>

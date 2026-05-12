@@ -16,8 +16,7 @@ export default function Dashboard() {
           <div>
             <h1 className="text-4xl font-bold tracking-tight text-stone-900">{workspace.businessLabel}</h1>
             <p className="mt-3 text-sm text-stone-600">
-              Signed in as {currentUser?.name}. This is the hosted web flow prototype for account
-              creation, onboarding, and browser-managed forwarding.
+              Signed in as {currentUser?.name}. Messages forwarded through this workspace are logged below.
             </p>
           </div>
           <div className="rounded-[1.5rem] border border-stone-200 bg-stone-50 px-5 py-4 text-sm text-stone-700">
@@ -40,12 +39,12 @@ export default function Dashboard() {
         <article className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm">
           <div className="text-sm font-semibold text-stone-500">Recent successes</div>
           <div className="mt-3 text-3xl font-bold text-stone-900">{stats.success}</div>
-          <p className="mt-2 text-sm text-stone-600">Real workspace-scoped log stats from the backend</p>
+          <p className="mt-2 text-sm text-stone-600">Successfully forwarded messages</p>
         </article>
         <article className="rounded-[1.75rem] border border-stone-200 bg-white p-6 shadow-sm">
           <div className="text-sm font-semibold text-stone-500">Recent failures</div>
           <div className="mt-3 text-3xl font-bold text-stone-900">{stats.failed}</div>
-          <p className="mt-2 text-sm text-stone-600">Backed by the new workspace-scoped message table</p>
+          <p className="mt-2 text-sm text-stone-600">Messages that failed to forward</p>
         </article>
       </section>
 

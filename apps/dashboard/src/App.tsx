@@ -1,11 +1,14 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import { ProductProvider, useProduct } from './context/ProductContext';
+import Billing from './pages/Billing';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import Messages from './pages/Messages';
 import Onboarding from './pages/Onboarding';
 import Settings from './pages/Settings';
+import NotFound from './pages/NotFound';
+import Pricing from './pages/Pricing';
 import Signup from './pages/Signup';
 import Welcome from './pages/Welcome';
 
@@ -36,6 +39,7 @@ function ProtectedAppShell() {
           <Route path="/app" element={<Dashboard />} />
           <Route path="/app/messages" element={<Messages />} />
           <Route path="/app/settings" element={<Settings />} />
+          <Route path="/app/billing" element={<Billing />} />
           <Route path="*" element={<Navigate to="/app" replace />} />
         </Routes>
       </main>
@@ -58,6 +62,7 @@ function PublicRoutes() {
     <Routes>
       <Route path="/" element={<Welcome />} />
       <Route path="/welcome" element={<Navigate to="/" replace />} />
+      <Route path="/pricing" element={<Pricing />} />
       <Route
         path="/signup"
         element={currentUser ? <Navigate to={workspace ? '/app' : '/onboarding'} replace /> : <Signup />}
@@ -70,7 +75,9 @@ function PublicRoutes() {
         path="/onboarding"
         element={currentUser ? <Onboarding /> : <Navigate to="/login" replace />}
       />
-      <Route path="/*" element={<ProtectedAppShell />} />
+      <Route path="/app" element={<ProtectedAppShell />} />
+      <Route path="/app/*" element={<ProtectedAppShell />} />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }

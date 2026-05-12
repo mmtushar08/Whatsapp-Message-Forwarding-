@@ -34,3 +34,15 @@ export const authRateLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Too many authentication requests, please try again later.' },
 });
+
+/**
+ * Stricter rate limiter for account creation.
+ * 5 signups per 15 minutes per IP to block spam registration.
+ */
+export const signupRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many signup attempts, please try again later.' },
+});

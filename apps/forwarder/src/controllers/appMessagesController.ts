@@ -4,7 +4,10 @@ import {
   getWorkspaceMessageLogs,
   getWorkspaceMessageStats,
 } from '../db/messageStore';
+import { getCurrentMonthUsage } from '../db/usageStore';
+import { getUserById } from '../db/userStore';
 import { getWorkspaceByUserId } from '../db/workspaceStore';
+import { getLimits } from '../services/planService';
 
 function getWorkspaceIdFromRequest(req: Request): string | null {
   if (!req.auth) {
@@ -39,10 +42,19 @@ export function getWorkspaceMessages(req: Request, res: Response): void {
 
 export function getWorkspaceStats(req: Request, res: Response): void {
   const workspaceId = getWorkspaceIdFromRequest(req);
-  if (!workspaceId) {
+  if (!workspaceId || !req.auth) {
     res.status(404).json({ error: 'Workspace not found', onboardingRequired: true });
     return;
   }
 
-  res.status(200).json(getWorkspaceMessageStats(workspaceId));
+  const stats = getWorkspaceMessageStats(workspaceId);
+  const monthlyUsage = getCurrentMonthUsage(workspaceId);
+  const owner = getUserById(req.auth.userId);
+  const limits = getLimits(owner?.plan ?? 'free');
+
+  res.status(200).json({
+    ...stats,
+    monthlyUsage,
+    monthlyLimit: limits.monthlyMessages,
+  });
 }

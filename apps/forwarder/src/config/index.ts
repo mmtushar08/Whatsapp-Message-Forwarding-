@@ -59,6 +59,15 @@ const config = {
 
   /** Base delay in ms for retry backoff */
   retryBaseDelayMs: parseInt(process.env['RETRY_BASE_DELAY_MS'] ?? '1000', 10),
+
+  /** Timeout in ms for WhatsApp Graph API calls */
+  whatsappTimeoutMs: parseInt(process.env['WHATSAPP_TIMEOUT_MS'] ?? '10000', 10),
+
+  /** AES-256-GCM key for encrypting workspace secrets at rest */
+  appEncryptionKey: requireEnv('APP_ENCRYPTION_KEY'),
+
+  /** Public-facing URL of this server, used to generate webhook URLs */
+  publicAppUrl: process.env['PUBLIC_APP_URL'] ?? '',
 };
 
 export default config;

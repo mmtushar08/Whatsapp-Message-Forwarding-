@@ -1,5 +1,6 @@
 import { clearSessionToken, getSessionToken, setSessionToken } from '../lib/session';
 import type {
+  BillingStatus,
   MessageStats,
   MarketplaceUser,
   Pagination,
@@ -150,8 +151,11 @@ export async function saveWorkspaceRequest(
         accessToken: input.accessToken,
         appSecret: input.appSecret,
         forwardToNumber: input.forwardToNumber,
+        extraRecipients: input.extraRecipients,
         keywordFilters: input.keywordFilters,
         forwardingEnabled: input.forwardingEnabled,
+        webhookRelayUrl: input.webhookRelayUrl,
+        emailForwardTo: input.emailForwardTo,
       }),
     },
     true,
@@ -188,4 +192,32 @@ export async function fetchWorkspaceMessages(
 
 export async function fetchWorkspaceStats(): Promise<MessageStats> {
   return request<MessageStats>('/app/messages/stats', { method: 'GET' }, true);
+}
+
+export async function fetchSmtpStatus(): Promise<{ smtpConfigured: boolean }> {
+  try {
+    return await request<{ smtpConfigured: boolean }>('/health/smtp', { method: 'GET' });
+  } catch {
+    return { smtpConfigured: false };
+  }
+}
+
+export async function fetchBillingStatus(): Promise<BillingStatus> {
+  return request<BillingStatus>('/billing/status', { method: 'GET' }, true);
+}
+
+export async function startSubscription(plan: 'starter' | 'pro' | 'business'): Promise<{
+  subscriptionId: string;
+  shortUrl: string;
+  status: string;
+}> {
+  return request<{ subscriptionId: string; shortUrl: string; status: string }>(
+    '/billing/subscribe',
+    { method: 'POST', body: JSON.stringify({ plan }) },
+    true,
+  );
+}
+
+export async function cancelSubscription(): Promise<{ success: boolean }> {
+  return request<{ success: boolean }>('/billing/cancel', { method: 'POST' }, true);
 }

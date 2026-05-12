@@ -7,7 +7,7 @@ export default function Welcome() {
         <div className="grid gap-10 lg:grid-cols-[1.2fr_0.8fr]">
           <section className="rounded-[2rem] border border-stone-200/70 bg-white/85 p-8 shadow-[0_30px_100px_rgba(36,32,25,0.08)] backdrop-blur">
             <p className="font-mono text-xs uppercase tracking-[0.3em] text-emerald-700">
-              Hosted Web Product
+              WhatsApp Forwarder
             </p>
             <h1 className="mt-4 max-w-3xl text-5xl font-bold leading-none tracking-tight">
               Sell WhatsApp message forwarding as a web-managed service.
@@ -22,6 +22,12 @@ export default function Welcome() {
                 className="rounded-full bg-emerald-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-800"
               >
                 Create Account
+              </Link>
+              <Link
+                to="/pricing"
+                className="rounded-full border border-stone-300 bg-white px-5 py-3 text-sm font-semibold text-stone-900 transition hover:border-stone-400"
+              >
+                See pricing
               </Link>
               <Link
                 to="/login"

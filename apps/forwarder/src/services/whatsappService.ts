@@ -42,7 +42,10 @@ export async function forwardMessageTo(
   try {
     return await withRetry(
       async () => {
-        const response = await axios.post<SendMessageResponse>(url, payload, { headers });
+        const response = await axios.post<SendMessageResponse>(url, payload, {
+          headers,
+          timeout: config.whatsappTimeoutMs,
+        });
         logger.info(
           `Message forwarded successfully. ID: ${response.data.messages?.[0]?.id ?? 'unknown'}`,
         );

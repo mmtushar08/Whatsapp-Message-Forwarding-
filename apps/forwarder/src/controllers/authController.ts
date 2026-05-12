@@ -4,12 +4,21 @@ import { createUser, getUserByEmail, getUserById } from '../db/userStore';
 import { getWorkspaceByUserId } from '../db/workspaceStore';
 import { createId, createSessionToken, hashPassword, verifyPassword } from '../services/authService';
 
-function sanitizeUser(user: { id: string; name: string; email: string; created_at: string }) {
+function sanitizeUser(user: {
+  id: string;
+  name: string;
+  email: string;
+  created_at: string;
+  plan?: string;
+  plan_expires_at?: string;
+}) {
   return {
     id: user.id,
     name: user.name,
     email: user.email,
     createdAt: user.created_at,
+    plan: (user.plan as 'free' | 'starter' | 'pro' | 'business' | undefined) ?? 'free',
+    planExpiresAt: user.plan_expires_at ?? '',
   };
 }
 
@@ -42,6 +51,11 @@ export function signup(req: Request, res: Response): void {
     name: name.trim(),
     email: normalizedEmail,
     password_hash: hashPassword(password),
+    plan: 'free' as const,
+    razorpay_customer_id: '',
+    razorpay_subscription_id: '',
+    plan_started_at: '',
+    plan_expires_at: '',
     created_at: timestamp,
     updated_at: timestamp,
   };

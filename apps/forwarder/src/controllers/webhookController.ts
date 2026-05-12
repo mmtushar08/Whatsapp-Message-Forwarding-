@@ -11,6 +11,11 @@ import { getForwardToNumber, isForwardingEnabled } from './configController';
 import { passesFilter, passesFilterForKeywords } from '../services/filterService';
 import logger from '../services/loggerService';
 import { forwardToMultiple } from '../services/whatsappService';
+import { sendForwardEmail } from '../services/emailService';
+import { relayToWebhook } from '../services/webhookRelayService';
+import { getLimits } from '../services/planService';
+import { getUserById } from '../db/userStore';
+import { getCurrentMonthUsage, incrementUsage } from '../db/usageStore';
 import { WebhookPayload } from '../types/whatsapp';
 import { extractMessages } from '../utils/messageParser';
 
@@ -104,9 +109,24 @@ export async function receiveWebhook(req: Request, res: Response): Promise<void>
       continue;
     }
 
+    // Free-tier monthly cap enforcement
+    if (workspace) {
+      const owner = getUserById(workspace.userId);
+      const limits = getLimits(owner?.plan ?? 'free');
+      if (limits.monthlyMessages !== -1) {
+        const used = getCurrentMonthUsage(workspace.id);
+        if (used >= limits.monthlyMessages) {
+          logger.warn(
+            `Workspace ${workspace.id} (plan: ${owner?.plan ?? 'free'}) exceeded monthly cap of ${limits.monthlyMessages}. Skipping message.`,
+          );
+          continue;
+        }
+      }
+    }
+
     try {
       const recipients = workspace
-        ? [workspace.forwardToNumber]
+        ? [workspace.forwardToNumber, ...workspace.extraRecipients].filter(Boolean)
         : config.forwardToNumbers.length > 0
           ? config.forwardToNumbers
           : [getForwardToNumber() || config.forwardToNumber];
@@ -140,6 +160,46 @@ export async function receiveWebhook(req: Request, res: Response): Promise<void>
           error,
         });
       });
+
+      // Count one usage event per inbound message (not per recipient) — simpler mental model for users.
+      if (workspace && results.some((r) => r.success)) {
+        incrementUsage(workspace.id);
+      }
+
+      if (workspace) {
+        const sideEffects: Promise<unknown>[] = [];
+
+        if (workspace.webhookRelayUrl) {
+          sideEffects.push(
+            relayToWebhook(workspace.webhookRelayUrl, {
+              from: message.from,
+              senderName: message.senderName,
+              message: message.text,
+              type: message.type,
+              receivedAt: new Date().toISOString(),
+              businessLabel: workspace.businessLabel,
+            }),
+          );
+        }
+
+        if (workspace.emailForwardTo) {
+          sideEffects.push(
+            sendForwardEmail({
+              to: workspace.emailForwardTo,
+              fromNumber: message.from,
+              senderName: message.senderName,
+              messageText: message.text,
+              businessLabel: workspace.businessLabel,
+            }).catch((err: Error) =>
+              logger.warn(`Email forward to ${workspace.emailForwardTo} failed: ${err.message}`),
+            ),
+          );
+        }
+
+        if (sideEffects.length > 0) {
+          await Promise.allSettled(sideEffects);
+        }
+      }
     } catch (error) {
       logger.error(`Failed to forward message from ${senderLabel}: ${(error as Error).message}`);
     }

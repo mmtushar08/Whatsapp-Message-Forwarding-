@@ -19,9 +19,9 @@ export default function Navbar() {
           <div className="rounded-full bg-white/15 px-3 py-2 text-white">WF</div>
           <div>
             <div className="text-sm font-semibold uppercase tracking-[0.25em] text-white/70">
-              Marketplace Prototype
+              Message Forwarding
             </div>
-            <div className="text-lg font-bold text-white">WhatsApp Forwarding Web App</div>
+            <div className="text-lg font-bold text-white">WhatsApp Forwarder</div>
           </div>
         </div>
 
@@ -34,6 +34,9 @@ export default function Navbar() {
           </NavLink>
           <NavLink to="/app/settings" className={navLinkClass}>
             Settings
+          </NavLink>
+          <NavLink to="/app/billing" className={navLinkClass}>
+            Billing
           </NavLink>
         </div>
 
