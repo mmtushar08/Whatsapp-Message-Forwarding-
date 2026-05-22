@@ -221,3 +221,7 @@ export async function startSubscription(plan: 'starter' | 'pro' | 'business'): P
 export async function cancelSubscription(): Promise<{ success: boolean }> {
   return request<{ success: boolean }>('/billing/cancel', { method: 'POST' }, true);
 }
+
+export async function testWorkspaceConnection(): Promise<{ success: boolean }> {
+  return request<{ success: boolean }>('/app/workspace/test', { method: 'POST' }, true);
+}

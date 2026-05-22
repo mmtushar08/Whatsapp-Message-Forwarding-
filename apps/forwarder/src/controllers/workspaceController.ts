@@ -2,9 +2,10 @@ import axios, { AxiosError } from 'axios';
 import { Request, Response } from 'express';
 import config from '../config';
 import { getUserById } from '../db/userStore';
-import { getWorkspaceByUserId, upsertWorkspace } from '../db/workspaceStore';
+import { getWorkspaceByUserId, getWorkspaceRuntime, upsertWorkspace } from '../db/workspaceStore';
 import logger from '../services/loggerService';
 import { validatePlanFeatures } from '../services/planService';
+import { forwardMessageTo } from '../services/whatsappService';
 
 const GRAPH_API_URL = 'https://graph.facebook.com/v18.0';
 
@@ -138,6 +139,31 @@ export async function saveWorkspace(req: Request, res: Response): Promise<void> 
       return;
     }
   }
+
+export async function testWorkspace(req: Request, res: Response): Promise<void> {
+  if (!req.auth) {
+    res.status(401).json({ error: 'Unauthorized: missing session' });
+    return;
+  }
+
+  const runtime = getWorkspaceRuntime(req.auth.userId);
+  if (!runtime) {
+    res.status(404).json({ error: 'Workspace not found. Complete setup first.' });
+    return;
+  }
+
+  try {
+    await forwardMessageTo(
+      'WhatsApp Forwarder',
+      'Test message — your forwarding setup is working correctly.',
+      runtime.forwardToNumber,
+      { accessToken: runtime.accessToken, phoneNumberId: runtime.phoneNumberId },
+    );
+    res.status(200).json({ success: true });
+  } catch (error) {
+    res.status(400).json({ error: (error as Error).message });
+  }
+}
 
   try {
     const normalizedFilters = Array.isArray(keywordFilters)

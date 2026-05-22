@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchSmtpStatus } from '../api/client';
+import { fetchSmtpStatus, testWorkspaceConnection } from '../api/client';
 import { useProduct } from '../context/ProductContext';
 
 const STEPS = [
@@ -94,6 +94,8 @@ export default function Onboarding() {
   const [smtpConfigured, setSmtpConfigured] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [testState, setTestState] = useState<'idle' | 'sending' | 'ok' | 'fail'>('idle');
+  const [testError, setTestError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchSmtpStatus().then((s) => setSmtpConfigured(s.smtpConfigured));
@@ -507,13 +509,44 @@ export default function Onboarding() {
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => navigate('/app')}
-              className="mt-6 w-full rounded-full bg-emerald-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-800"
-            >
-              Go to dashboard →
-            </button>
+            <div className="mt-6 space-y-3">
+              <button
+                type="button"
+                disabled={testState === 'sending'}
+                onClick={async () => {
+                  setTestState('sending');
+                  setTestError(null);
+                  try {
+                    await testWorkspaceConnection();
+                    setTestState('ok');
+                  } catch (e) {
+                    setTestState('fail');
+                    setTestError((e as Error).message);
+                  }
+                }}
+                className="w-full rounded-full border border-emerald-700 px-5 py-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50 disabled:opacity-60"
+              >
+                {testState === 'sending'
+                  ? 'Sending test message...'
+                  : testState === 'ok'
+                    ? '✓ Test message sent — check your phone'
+                    : 'Send test message to verify setup'}
+              </button>
+
+              {testState === 'fail' && testError && (
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
+                  {testError}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => navigate('/app')}
+                className="w-full rounded-full bg-emerald-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-800"
+              >
+                Go to dashboard →
+              </button>
+            </div>
           </div>
         )}
       </div>
