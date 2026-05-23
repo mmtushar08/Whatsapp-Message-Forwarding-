@@ -206,6 +206,14 @@ export function upsertWorkspace(userId: string, input: WorkspaceInput): Workspac
   return getWorkspaceByUserId(userId) as WorkspaceView;
 }
 
+export function getWorkspaceRuntimeByUserId(userId: string): WorkspaceRuntime | null {
+  const db = getDatabase();
+  const record = db
+    .prepare('SELECT * FROM workspaces WHERE user_id = ?')
+    .get(userId) as WorkspaceRecord | undefined;
+  return record ? toWorkspaceRuntime(record) : null;
+}
+
 export function getWorkspaceRuntimeByVerifyToken(verifyToken: string): WorkspaceRuntime | null {
   const db = getDatabase();
   const record = db

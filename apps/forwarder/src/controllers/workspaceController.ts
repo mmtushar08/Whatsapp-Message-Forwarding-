@@ -2,7 +2,7 @@ import axios, { AxiosError } from 'axios';
 import { Request, Response } from 'express';
 import config from '../config';
 import { getUserById } from '../db/userStore';
-import { getWorkspaceByUserId, getWorkspaceRuntime, upsertWorkspace } from '../db/workspaceStore';
+import { getWorkspaceByUserId, getWorkspaceRuntimeByUserId, upsertWorkspace } from '../db/workspaceStore';
 import logger from '../services/loggerService';
 import { validatePlanFeatures } from '../services/planService';
 import { forwardMessageTo } from '../services/whatsappService';
@@ -62,7 +62,6 @@ async function validateWhatsappCredentials(phoneNumberId: string, accessToken: s
     if (status === 404) {
       throw new Error('Phone Number ID not found. Make sure you copied it from the correct Meta app.');
     }
-    // Network error or timeout — log a warning but allow save to proceed
     logger.warn(`Could not validate WhatsApp credentials (non-auth error): ${(error as Error).message}`);
   }
 }
@@ -130,7 +129,6 @@ export async function saveWorkspace(req: Request, res: Response): Promise<void> 
     return;
   }
 
-  // Validate credentials against the Graph API when a token is provided
   if (tokenToValidate) {
     try {
       await validateWhatsappCredentials(phoneNumberId.trim(), tokenToValidate);
@@ -139,31 +137,6 @@ export async function saveWorkspace(req: Request, res: Response): Promise<void> 
       return;
     }
   }
-
-export async function testWorkspace(req: Request, res: Response): Promise<void> {
-  if (!req.auth) {
-    res.status(401).json({ error: 'Unauthorized: missing session' });
-    return;
-  }
-
-  const runtime = getWorkspaceRuntime(req.auth.userId);
-  if (!runtime) {
-    res.status(404).json({ error: 'Workspace not found. Complete setup first.' });
-    return;
-  }
-
-  try {
-    await forwardMessageTo(
-      'WhatsApp Forwarder',
-      'Test message — your forwarding setup is working correctly.',
-      runtime.forwardToNumber,
-      { accessToken: runtime.accessToken, phoneNumberId: runtime.phoneNumberId },
-    );
-    res.status(200).json({ success: true });
-  } catch (error) {
-    res.status(400).json({ error: (error as Error).message });
-  }
-}
 
   try {
     const normalizedFilters = Array.isArray(keywordFilters)
@@ -208,6 +181,31 @@ export async function testWorkspace(req: Request, res: Response): Promise<void> 
     });
 
     res.status(200).json({ workspace });
+  } catch (error) {
+    res.status(400).json({ error: (error as Error).message });
+  }
+}
+
+export async function testWorkspace(req: Request, res: Response): Promise<void> {
+  if (!req.auth) {
+    res.status(401).json({ error: 'Unauthorized: missing session' });
+    return;
+  }
+
+  const runtime = getWorkspaceRuntimeByUserId(req.auth.userId);
+  if (!runtime) {
+    res.status(404).json({ error: 'Workspace not found. Complete setup first.' });
+    return;
+  }
+
+  try {
+    await forwardMessageTo(
+      'WhatsApp Forwarder',
+      'Test message — your forwarding setup is working correctly.',
+      runtime.forwardToNumber,
+      { accessToken: runtime.accessToken, phoneNumberId: runtime.phoneNumberId },
+    );
+    res.status(200).json({ success: true });
   } catch (error) {
     res.status(400).json({ error: (error as Error).message });
   }

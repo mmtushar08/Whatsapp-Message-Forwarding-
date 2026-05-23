@@ -16,17 +16,17 @@ function requireEnv(name: string): string {
 }
 
 const config = {
-  /** WhatsApp Cloud API bearer token */
-  whatsappAccessToken: requireEnv('WHATSAPP_ACCESS_TOKEN'),
+  /** Legacy single-tenant token — unused in multi-tenant mode (credentials stored per-workspace in DB) */
+  whatsappAccessToken: process.env['WHATSAPP_ACCESS_TOKEN'] ?? '',
 
-  /** Phone Number ID from Meta dashboard (sender) */
-  whatsappPhoneNumberId: requireEnv('WHATSAPP_PHONE_NUMBER_ID'),
+  /** Legacy single-tenant phone number ID — unused in multi-tenant mode */
+  whatsappPhoneNumberId: process.env['WHATSAPP_PHONE_NUMBER_ID'] ?? '',
 
-  /** The destination phone number to forward messages to (no + sign) */
-  forwardToNumber: requireEnv('FORWARD_TO_NUMBER'),
+  /** Legacy single-tenant forward-to number — unused in multi-tenant mode */
+  forwardToNumber: process.env['FORWARD_TO_NUMBER'] ?? '',
 
-  /** Token used to verify webhook with Meta */
-  webhookVerifyToken: requireEnv('WEBHOOK_VERIFY_TOKEN'),
+  /** Legacy verify token — unused in multi-tenant mode (stored per-workspace) */
+  webhookVerifyToken: process.env['WEBHOOK_VERIFY_TOKEN'] ?? '',
 
   /** Express server port */
   port: parseInt(process.env['PORT'] ?? '3000', 10),
