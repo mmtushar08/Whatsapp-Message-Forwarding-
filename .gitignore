@@ -36,3 +36,4 @@ data/*.db-wal
 *.db
 *.db-shm
 *.db-wal
+logs/
