@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Policy — WhatsApp Forwarder</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 16px;
+      line-height: 1.7;
+      color: #1c1917;
+      background: #fafaf9;
+    }
+    .wrapper {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 60px 24px 100px;
+    }
+    .brand {
+      display: inline-block;
+      background: #15803d;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      padding: 6px 14px;
+      border-radius: 999px;
+      margin-bottom: 28px;
+    }
+    h1 {
+      font-size: 2.25rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: #0c0a09;
+      margin-bottom: 8px;
+    }
+    .meta {
+      font-size: 14px;
+      color: #78716c;
+      margin-bottom: 48px;
+    }
+    h2 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #0c0a09;
+      margin: 40px 0 12px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #e7e5e4;
+    }
+    p { margin-bottom: 14px; color: #44403c; }
+    ul, ol {
+      margin: 0 0 14px 24px;
+      color: #44403c;
+    }
+    li { margin-bottom: 6px; }
+    a { color: #15803d; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .highlight {
+      background: #f0fdf4;
+      border-left: 4px solid #15803d;
+      padding: 16px 20px;
+      border-radius: 0 8px 8px 0;
+      margin: 20px 0;
+      font-size: 15px;
+      color: #14532d;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0 24px;
+      font-size: 14px;
+    }
+    th {
+      background: #f5f5f4;
+      text-align: left;
+      padding: 10px 14px;
+      font-weight: 600;
+      border: 1px solid #e7e5e4;
+      color: #0c0a09;
+    }
+    td {
+      padding: 10px 14px;
+      border: 1px solid #e7e5e4;
+      vertical-align: top;
+      color: #44403c;
+    }
+    footer {
+      margin-top: 64px;
+      padding-top: 24px;
+      border-top: 1px solid #e7e5e4;
+      font-size: 13px;
+      color: #a8a29e;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+
+    <div class="brand">WhatsApp Forwarder</div>
+    <h1>Privacy Policy</h1>
+    <p class="meta">Last updated: May 29, 2026 &nbsp;·&nbsp; Effective date: May 29, 2026</p>
+
+    <div class="highlight">
+      <strong>Summary:</strong> WhatsApp Forwarder routes inbound WhatsApp messages to destinations you configure (phone numbers, email, webhooks). We do not sell your data, do not store message content beyond your configured log retention period, and you can delete your account and all associated data at any time.
+    </div>
+
+    <h2>1. Who We Are</h2>
+    <p>
+      WhatsApp Forwarder ("we", "us", "our") is a business messaging tool that connects to the
+      WhatsApp Business Platform (Meta Cloud API) using credentials you provide, and forwards
+      inbound messages to destinations you configure. Our service is operated by the entity
+      listed in the contact section below.
+    </p>
+
+    <h2>2. What Data We Collect</h2>
+    <p>We collect only the minimum data necessary to provide the service:</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Purpose</th>
+          <th>Retention</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Account data</strong><br/>Name, email address, hashed password</td>
+          <td>Account authentication and communication</td>
+          <td>Until account deletion</td>
+        </tr>
+        <tr>
+          <td><strong>WhatsApp credentials</strong><br/>Phone Number ID, Access Token, App Secret</td>
+          <td>Connecting to Meta Cloud API on your behalf. Stored AES-256-GCM encrypted at rest.</td>
+          <td>Until workspace deletion</td>
+        </tr>
+        <tr>
+          <td><strong>Message logs</strong><br/>Sender number, recipient number, message text, status, timestamp</td>
+          <td>Audit trail and dashboard display. You can clear logs at any time.</td>
+          <td>90 days by default (configurable)</td>
+        </tr>
+        <tr>
+          <td><strong>Forwarding configuration</strong><br/>Destination numbers, keyword filters, relay URLs, email addresses</td>
+          <td>Executing your forwarding rules</td>
+          <td>Until workspace deletion</td>
+        </tr>
+        <tr>
+          <td><strong>Usage counters</strong><br/>Monthly message count per workspace</td>
+          <td>Plan limit enforcement and billing</td>
+          <td>12 months rolling</td>
+        </tr>
+        <tr>
+          <td><strong>Session tokens</strong><br/>Cryptographically random, stored as SHA-256 hash</td>
+          <td>Keeping you logged in</td>
+          <td>Per your configured session TTL (default 24 hours)</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>
+      We do <strong>not</strong> collect: precise location data, device identifiers, browsing history,
+      advertising IDs, or any data from your contacts beyond what appears in inbound WhatsApp messages.
+    </p>
+
+    <h2>3. How We Use Your Data</h2>
+    <ul>
+      <li>Authenticate your account and maintain your session</li>
+      <li>Connect to Meta's WhatsApp Cloud API using your credentials to receive and forward messages</li>
+      <li>Route inbound messages to the destinations you configure (WhatsApp numbers, email, webhooks)</li>
+      <li>Display message history and usage statistics in your dashboard</li>
+      <li>Send transactional emails (account verification, billing receipts)</li>
+      <li>Enforce plan limits and process subscription billing via Razorpay</li>
+    </ul>
+    <p>We do <strong>not</strong> use your data for advertising, profiling, or sell it to third parties.</p>
+
+    <h2>4. WhatsApp / Meta Platform Data</h2>
+    <p>
+      WhatsApp Forwarder accesses the WhatsApp Business Platform through the Meta Cloud API
+      using credentials that <strong>you own and control</strong>. We act as a data processor
+      on your behalf. Specifically:
+    </p>
+    <ul>
+      <li>We receive inbound webhook events from Meta containing message content and sender information</li>
+      <li>We forward that content to destinations you have configured</li>
+      <li>We store message logs for the retention period you configure</li>
+      <li>We do not use WhatsApp message content for any purpose other than executing your forwarding rules</li>
+      <li>We do not share WhatsApp message content with third parties except the destinations you have explicitly configured</li>
+    </ul>
+    <p>
+      Your use of WhatsApp Business Platform is also subject to
+      <a href="https://www.whatsapp.com/legal/business-policy/" target="_blank" rel="noopener">WhatsApp's Business Policy</a>
+      and <a href="https://developers.facebook.com/terms/" target="_blank" rel="noopener">Meta's Platform Terms</a>.
+    </p>
+
+    <h2>5. Data Sharing and Third Parties</h2>
+    <p>We share data only as described below:</p>
+    <table>
+      <thead>
+        <tr><th>Party</th><th>What is shared</th><th>Purpose</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Meta / WhatsApp</strong></td>
+          <td>API requests using your credentials</td>
+          <td>Sending forwarded messages via WhatsApp Cloud API</td>
+        </tr>
+        <tr>
+          <td><strong>Razorpay</strong></td>
+          <td>Name, email, subscription plan</td>
+          <td>Payment processing for paid plans (if applicable)</td>
+        </tr>
+        <tr>
+          <td><strong>SMTP provider</strong></td>
+          <td>Message content, sender number</td>
+          <td>Email forwarding — only if you configure an email destination</td>
+        </tr>
+        <tr>
+          <td><strong>Your configured webhook URLs</strong></td>
+          <td>Message content, sender number, timestamp</td>
+          <td>Webhook relay — only if you configure a relay URL</td>
+        </tr>
+        <tr>
+          <td><strong>Hosting infrastructure</strong></td>
+          <td>Server logs (IP addresses, request metadata)</td>
+          <td>Service operation and security</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>We do not sell, rent, or trade your personal data to any party.</p>
+
+    <h2>6. Data Security</h2>
+    <ul>
+      <li>WhatsApp credentials (access tokens, app secrets) are encrypted at rest using AES-256-GCM</li>
+      <li>All data in transit is encrypted via TLS 1.2+</li>
+      <li>Session tokens are stored as SHA-256 hashes — the original token is never persisted</li>
+      <li>Webhook signature verification (HMAC-SHA256) ensures only legitimate Meta events are processed</li>
+      <li>Rate limiting is applied to all authentication endpoints to prevent brute-force attacks</li>
+      <li>The database uses WAL mode with regular integrity checks</li>
+    </ul>
+
+    <h2>7. Your Rights</h2>
+    <p>Depending on your jurisdiction, you may have the right to:</p>
+    <ul>
+      <li><strong>Access</strong> — request a copy of the personal data we hold about you</li>
+      <li><strong>Correction</strong> — correct inaccurate personal data</li>
+      <li><strong>Deletion</strong> — delete your account and all associated data (message logs, workspace configuration, credentials)</li>
+      <li><strong>Portability</strong> — receive your message logs in machine-readable format (JSON/CSV)</li>
+      <li><strong>Objection</strong> — object to processing based on legitimate interests</li>
+      <li><strong>Restriction</strong> — request restriction of processing in certain circumstances</li>
+    </ul>
+    <p>
+      To exercise any right, email us at the address in Section 11.
+      We will respond within 30 days. Account and data deletion can also be
+      performed directly from your account settings.
+    </p>
+
+    <h2>8. Data Retention</h2>
+    <ul>
+      <li>Message logs are retained for 90 days by default. You can clear them at any time from your dashboard.</li>
+      <li>Account data is retained until you delete your account.</li>
+      <li>Workspace credentials are deleted immediately upon workspace deletion.</li>
+      <li>Billing records are retained for 7 years as required by applicable financial regulations.</li>
+      <li>After account deletion, anonymised aggregate usage statistics may be retained for up to 12 months.</li>
+    </ul>
+
+    <h2>9. International Data Transfers</h2>
+    <p>
+      Our service is hosted on servers within the region you select. If data is transferred
+      outside your jurisdiction (for example, to Meta's servers in the United States for WhatsApp
+      API calls), such transfers are governed by Meta's data processing terms and applicable
+      Standard Contractual Clauses or equivalent safeguards.
+    </p>
+
+    <h2>10. Children's Privacy</h2>
+    <p>
+      WhatsApp Forwarder is a business tool intended for use by adults and businesses only.
+      We do not knowingly collect personal data from individuals under 18 years of age.
+      If you believe a minor has provided us with personal data, please contact us immediately.
+    </p>
+
+    <h2>11. Cookies and Tracking</h2>
+    <p>
+      We use a single session token stored in your browser's <code>localStorage</code> for
+      authentication purposes only. We do not use advertising cookies, tracking pixels,
+      or third-party analytics scripts.
+    </p>
+
+    <h2>12. Changes to This Policy</h2>
+    <p>
+      We may update this Privacy Policy from time to time. Material changes will be communicated
+      by email to your registered address at least 14 days before taking effect. The "last updated"
+      date at the top of this page reflects the most recent revision.
+    </p>
+
+    <h2>13. Contact Us</h2>
+    <p>
+      For privacy-related requests, questions, or complaints, contact us at:
+    </p>
+    <ul>
+      <li><strong>Email:</strong> <a href="mailto:privacy@whatsappforwarder.com">privacy@whatsappforwarder.com</a></li>
+      <li><strong>Product:</strong> WhatsApp Forwarder</li>
+    </ul>
+    <p>
+      If you are located in the European Union and are not satisfied with our response,
+      you have the right to lodge a complaint with your local data protection authority.
+    </p>
+
+    <footer>
+      &copy; 2026 WhatsApp Forwarder &nbsp;·&nbsp;
+      <a href="/terms">Terms of Service</a> &nbsp;·&nbsp;
+      <a href="/privacy">Privacy Policy</a>
+    </footer>
+
+  </div>
+</body>
+</html>
