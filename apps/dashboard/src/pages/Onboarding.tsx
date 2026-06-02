@@ -136,6 +136,8 @@ export default function Onboarding() {
       forwardingEnabled,
       webhookRelayUrl: webhookRelayUrl.trim(),
       emailForwardTo: emailForwardTo.trim(),
+      autoReplyEnabled: false,
+      autoReplyPrompt: '',
     });
     setSaving(false);
     if (!result.ok) {

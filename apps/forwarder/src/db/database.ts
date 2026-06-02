@@ -133,6 +133,12 @@ export function initDatabase(): void {
   if (!workspaceColumns.some((c) => c.name === 'email_forward_to')) {
     db.exec(`ALTER TABLE workspaces ADD COLUMN email_forward_to TEXT NOT NULL DEFAULT ''`);
   }
+  if (!workspaceColumns.some((c) => c.name === 'auto_reply_enabled')) {
+    db.exec(`ALTER TABLE workspaces ADD COLUMN auto_reply_enabled INTEGER NOT NULL DEFAULT 0`);
+  }
+  if (!workspaceColumns.some((c) => c.name === 'auto_reply_prompt')) {
+    db.exec(`ALTER TABLE workspaces ADD COLUMN auto_reply_prompt TEXT NOT NULL DEFAULT ''`);
+  }
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS forwarding_rules (

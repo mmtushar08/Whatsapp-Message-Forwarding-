@@ -68,6 +68,8 @@ export async function saveWorkspace(req: Request, res: Response): Promise<void> 
     forwardingEnabled,
     webhookRelayUrl,
     emailForwardTo,
+    autoReplyEnabled,
+    autoReplyPrompt,
   } = req.body as {
     businessLabel?: string;
     sourcePhoneNumber?: string;
@@ -80,6 +82,8 @@ export async function saveWorkspace(req: Request, res: Response): Promise<void> 
     forwardingEnabled?: boolean;
     webhookRelayUrl?: string;
     emailForwardTo?: string;
+    autoReplyEnabled?: boolean;
+    autoReplyPrompt?: string;
   };
 
   if (!businessLabel || !sourcePhoneNumber || !phoneNumberId || !forwardToNumber) {
@@ -141,6 +145,8 @@ export async function saveWorkspace(req: Request, res: Response): Promise<void> 
       forwardingEnabled: forwardingEnabled ?? true,
       webhookRelayUrl: validatedRelayUrl,
       emailForwardTo: validatedEmail,
+      autoReplyEnabled: autoReplyEnabled ?? false,
+      autoReplyPrompt: (autoReplyPrompt ?? '').trim(),
       webhookBaseUrl: deriveWebhookBaseUrl(req),
     });
 

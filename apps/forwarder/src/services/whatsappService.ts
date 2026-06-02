@@ -89,3 +89,26 @@ export async function forwardToMultiple(
     error: result.status === 'rejected' ? (result.reason as Error).message : undefined,
   }));
 }
+
+export async function sendDirectMessage(
+  to: string,
+  text: string,
+  runtimeConfig: WhatsappRuntimeConfig = {
+    accessToken: config.whatsappAccessToken,
+    phoneNumberId: config.whatsappPhoneNumberId,
+  },
+): Promise<void> {
+  const url = `${GRAPH_API_URL}/${runtimeConfig.phoneNumberId}/messages`;
+  const headers = {
+    Authorization: `Bearer ${runtimeConfig.accessToken}`,
+    'Content-Type': 'application/json',
+  };
+  await withRetry(() =>
+    axios.post<SendMessageResponse>(url, {
+      messaging_product: 'whatsapp',
+      to,
+      type: 'text',
+      text: { body: text },
+    }, { headers }),
+  );
+}

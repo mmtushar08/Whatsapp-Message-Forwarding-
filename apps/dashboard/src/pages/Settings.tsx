@@ -25,6 +25,7 @@ export default function Settings() {
   const canAddMoreDestinations = caps.maxDestinations > 1;
   const canUseWebhookRelay = caps.webhookRelay;
   const canUseEmailForward = caps.emailForward;
+  const canUseAiReply = caps.aiAutoReply;
   const [businessLabel, setBusinessLabel] = useState(workspace?.businessLabel ?? '');
   const [sourcePhoneNumber, setSourcePhoneNumber] = useState(workspace?.sourcePhoneNumber ?? '');
   const [phoneNumberId, setPhoneNumberId] = useState(workspace?.phoneNumberId ?? '');
@@ -36,6 +37,8 @@ export default function Settings() {
   const [forwardingEnabled, setForwardingEnabled] = useState(workspace?.forwardingEnabled ?? true);
   const [webhookRelayUrl, setWebhookRelayUrl] = useState(workspace?.webhookRelayUrl ?? '');
   const [emailForwardTo, setEmailForwardTo] = useState(workspace?.emailForwardTo ?? '');
+  const [autoReplyEnabled, setAutoReplyEnabled] = useState(workspace?.autoReplyEnabled ?? false);
+  const [autoReplyPrompt, setAutoReplyPrompt] = useState(workspace?.autoReplyPrompt ?? '');
   const [smtpConfigured, setSmtpConfigured] = useState<boolean | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -78,6 +81,8 @@ export default function Settings() {
       forwardingEnabled,
       webhookRelayUrl: webhookRelayUrl.trim(),
       emailForwardTo: emailForwardTo.trim(),
+      autoReplyEnabled,
+      autoReplyPrompt: autoReplyPrompt.trim(),
     });
     setSaving(false);
 
@@ -275,6 +280,47 @@ export default function Settings() {
                 </div>
               )}
             </label>
+          </div>
+        </section>
+
+        {/* ─── AI Auto-Reply ─── */}
+        <section className="border-t border-stone-200 pt-6">
+          <p className="font-mono text-xs uppercase tracking-[0.25em] text-stone-500">
+            AI Auto-Reply
+          </p>
+          <div className="mt-4 space-y-4">
+            {canUseAiReply ? (
+              <>
+                <label className="flex cursor-pointer items-center gap-3">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded accent-emerald-600"
+                    checked={autoReplyEnabled}
+                    onChange={(e) => setAutoReplyEnabled(e.target.checked)}
+                  />
+                  <span className="text-sm font-semibold text-stone-700">Enable AI auto-reply</span>
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-stone-700">
+                    System prompt{' '}
+                    <span className="font-normal text-stone-400">(optional)</span>
+                  </span>
+                  <textarea
+                    rows={4}
+                    disabled={!autoReplyEnabled}
+                    className="w-full rounded-2xl border border-stone-300 px-4 py-3 text-sm outline-none focus:border-emerald-600 disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-400"
+                    value={autoReplyEnabled ? autoReplyPrompt : ''}
+                    onChange={(e) => setAutoReplyPrompt(e.target.value)}
+                    placeholder="You are a helpful assistant for Acme Corp. Answer questions about our products concisely."
+                  />
+                  <span className="mt-1.5 block text-xs text-stone-400">
+                    Claude will reply to every inbound WhatsApp message using this prompt. Leave blank to use the default assistant persona.
+                  </span>
+                </label>
+              </>
+            ) : (
+              <UpgradePrompt requiredPlan="Pro" feature="AI auto-reply" />
+            )}
           </div>
         </section>
 

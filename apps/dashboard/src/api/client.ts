@@ -158,6 +158,8 @@ export async function saveWorkspaceRequest(
         forwardingEnabled: input.forwardingEnabled,
         webhookRelayUrl: input.webhookRelayUrl,
         emailForwardTo: input.emailForwardTo,
+        autoReplyEnabled: input.autoReplyEnabled,
+        autoReplyPrompt: input.autoReplyPrompt,
       }),
     },
     true,

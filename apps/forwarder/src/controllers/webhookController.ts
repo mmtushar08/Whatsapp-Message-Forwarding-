@@ -11,7 +11,8 @@ import { logMessage } from '../db/messageStore';
 import { getForwardToNumber, isForwardingEnabled } from './configController';
 import { passesFilter, passesFilterForKeywords } from '../services/filterService';
 import logger from '../services/loggerService';
-import { forwardToMultiple } from '../services/whatsappService';
+import { forwardToMultiple, sendDirectMessage } from '../services/whatsappService';
+import { generateReply } from '../services/aiService';
 import { sendForwardEmail } from '../services/emailService';
 import { relayToWebhook } from '../services/webhookRelayService';
 import { getLimits } from '../services/planService';
@@ -182,6 +183,15 @@ export async function receiveWebhook(req: Request, res: Response): Promise<void>
 
       if (workspace) {
         await runSideEffects(workspace.webhookRelayUrl, workspace.emailForwardTo, message, workspace.businessLabel);
+
+        if (workspace.autoReplyEnabled) {
+          const reply = await generateReply(workspace.autoReplyPrompt, message.text).catch(() => null);
+          if (reply) {
+            await sendDirectMessage(message.from, reply, { accessToken: workspace.accessToken, phoneNumberId: workspace.phoneNumberId })
+              .catch((e: Error) => logger.warn(`AI auto-reply send failed: ${e.message}`));
+            logger.info(`AI auto-reply sent to ${maskPhoneNumber(message.from)}`);
+          }
+        }
 
         for (const rule of getRulesForWorkspace(workspace.id)) {
           if (!rule.forwardingEnabled) continue;
