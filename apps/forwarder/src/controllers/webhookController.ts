@@ -20,11 +20,24 @@ import { getCurrentMonthUsage, incrementUsage } from '../db/usageStore';
 import { WebhookPayload } from '../types/whatsapp';
 import { extractMessages } from '../utils/messageParser';
 
-function resolveWorkspaceForVerification(token: string | undefined): WorkspaceRuntime | null {
-  if (!token) {
-    return null;
+async function runSideEffects(
+  relayUrl: string,
+  emailTo: string,
+  msg: { from: string; senderName?: string; text: string; type: string },
+  businessLabel: string,
+): Promise<void> {
+  const tasks: Promise<unknown>[] = [];
+  if (relayUrl) {
+    tasks.push(relayToWebhook(relayUrl, { from: msg.from, senderName: msg.senderName, message: msg.text, type: msg.type, receivedAt: new Date().toISOString(), businessLabel }));
   }
+  if (emailTo) {
+    tasks.push(sendForwardEmail({ to: emailTo, fromNumber: msg.from, senderName: msg.senderName, messageText: msg.text, businessLabel }).catch((e: Error) => logger.warn(`Email forward failed: ${e.message}`)));
+  }
+  if (tasks.length) await Promise.allSettled(tasks);
+}
 
+function resolveWorkspaceForVerification(token: string | undefined): WorkspaceRuntime | null {
+  if (!token) return null;
   return getWorkspaceRuntimeByVerifyToken(token);
 }
 
@@ -168,95 +181,20 @@ export async function receiveWebhook(req: Request, res: Response): Promise<void>
       }
 
       if (workspace) {
-        const sideEffects: Promise<unknown>[] = [];
+        await runSideEffects(workspace.webhookRelayUrl, workspace.emailForwardTo, message, workspace.businessLabel);
 
-        if (workspace.webhookRelayUrl) {
-          sideEffects.push(
-            relayToWebhook(workspace.webhookRelayUrl, {
-              from: message.from,
-              senderName: message.senderName,
-              message: message.text,
-              type: message.type,
-              receivedAt: new Date().toISOString(),
-              businessLabel: workspace.businessLabel,
-            }),
-          );
-        }
+        for (const rule of getRulesForWorkspace(workspace.id)) {
+          if (!rule.forwardingEnabled || !passesFilterForKeywords(message.text, rule.keywordFilters)) continue;
 
-        if (workspace.emailForwardTo) {
-          sideEffects.push(
-            sendForwardEmail({
-              to: workspace.emailForwardTo,
-              fromNumber: message.from,
-              senderName: message.senderName,
-              messageText: message.text,
-              businessLabel: workspace.businessLabel,
-            }).catch((err: Error) =>
-              logger.warn(`Email forward to ${workspace.emailForwardTo} failed: ${err.message}`),
-            ),
-          );
-        }
-
-        if (sideEffects.length > 0) {
-          await Promise.allSettled(sideEffects);
-        }
-
-        // Process additional forwarding rules for this workspace
-        const additionalRules = getRulesForWorkspace(workspace.id);
-        for (const rule of additionalRules) {
-          if (!rule.forwardingEnabled) continue;
-          if (!passesFilterForKeywords(message.text, rule.keywordFilters)) continue;
-
-          const ruleRecipients = [rule.forwardToNumber, ...rule.extraRecipients].filter(Boolean);
-          const ruleResults = await forwardToMultiple(
-            message.from,
-            message.text,
-            ruleRecipients,
-            { accessToken: workspace.accessToken, phoneNumberId: workspace.phoneNumberId },
-          ).catch((err: Error) => {
-            logger.error(`Rule ${rule.id} (${rule.name}) failed: ${err.message}`);
-            return ruleRecipients.map((to) => ({ to, success: false, error: err.message }));
-          });
+          const recipients = [rule.forwardToNumber, ...rule.extraRecipients].filter(Boolean);
+          const ruleResults = await forwardToMultiple(message.from, message.text, recipients, { accessToken: workspace.accessToken, phoneNumberId: workspace.phoneNumberId })
+            .catch((e: Error) => recipients.map((to) => ({ to, success: false, error: e.message })));
 
           ruleResults.forEach(({ to, success, error }) => {
-            logMessage({
-              workspace_id: workspace.id,
-              from_number: message.from,
-              to_number: to,
-              message: message.text,
-              type: message.type,
-              status: success ? 'success' : 'failed',
-              error,
-            });
+            logMessage({ workspace_id: workspace.id, from_number: message.from, to_number: to, message: message.text, type: message.type, status: success ? 'success' : 'failed', error });
           });
 
-          const ruleSideEffects: Promise<unknown>[] = [];
-          if (rule.webhookRelayUrl) {
-            ruleSideEffects.push(
-              relayToWebhook(rule.webhookRelayUrl, {
-                from: message.from,
-                senderName: message.senderName,
-                message: message.text,
-                type: message.type,
-                receivedAt: new Date().toISOString(),
-                businessLabel: workspace.businessLabel,
-              }),
-            );
-          }
-          if (rule.emailForwardTo) {
-            ruleSideEffects.push(
-              sendForwardEmail({
-                to: rule.emailForwardTo,
-                fromNumber: message.from,
-                senderName: message.senderName,
-                messageText: message.text,
-                businessLabel: workspace.businessLabel,
-              }).catch((err: Error) =>
-                logger.warn(`Rule ${rule.id} email forward failed: ${err.message}`),
-              ),
-            );
-          }
-          if (ruleSideEffects.length > 0) await Promise.allSettled(ruleSideEffects);
+          await runSideEffects(rule.webhookRelayUrl, rule.emailForwardTo, message, workspace.businessLabel);
         }
       }
     } catch (error) {

@@ -6,6 +6,7 @@ import { getWorkspaceByUserId, getWorkspaceRuntimeByUserId, upsertWorkspace } fr
 import logger from '../services/loggerService';
 import { validatePlanFeatures } from '../services/planService';
 import { forwardMessageTo } from '../services/whatsappService';
+import { normalizePhoneNumber, parseCSV, validateOptionalEmail, validateOptionalUrl } from '../utils/validation';
 
 const GRAPH_API_URL = 'https://graph.facebook.com/v18.0';
 
@@ -14,38 +15,6 @@ function deriveWebhookBaseUrl(req: Request): string {
   const proto = (req.headers['x-forwarded-proto'] as string | undefined) ?? req.protocol;
   const host = (req.headers['x-forwarded-host'] as string | undefined) ?? req.get('host') ?? 'localhost:3000';
   return `${proto}://${host}`;
-}
-
-function normalizePhoneNumber(value: string): string {
-  const cleaned = value.replace(/\D/g, '');
-  if (cleaned.length < 7 || cleaned.length > 15) {
-    throw new Error('Phone numbers must be 7-15 digits with country code and no plus sign.');
-  }
-  return cleaned;
-}
-
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function validateOptionalUrl(value: string, label: string): string {
-  if (!value) return '';
-  if (!/^https?:\/\//i.test(value)) {
-    throw new Error(`${label} must start with http:// or https://`);
-  }
-  return value.trim();
-}
-
-function validateOptionalEmail(value: string): string {
-  if (!value) return '';
-  if (!EMAIL_REGEX.test(value)) {
-    throw new Error('Email forwarding address is not a valid email.');
-  }
-  return value.trim();
-}
-
-function parseExtraRecipients(value: string[] | string | undefined): string[] {
-  if (!value) return [];
-  const raw = Array.isArray(value) ? value : value.split(',');
-  return raw.map((v) => v.trim()).filter(Boolean).map(normalizePhoneNumber);
 }
 
 async function validateWhatsappCredentials(phoneNumberId: string, accessToken: string): Promise<void> {
@@ -139,13 +108,8 @@ export async function saveWorkspace(req: Request, res: Response): Promise<void> 
   }
 
   try {
-    const normalizedFilters = Array.isArray(keywordFilters)
-      ? keywordFilters
-      : typeof keywordFilters === 'string'
-        ? keywordFilters.split(',').map((value) => value.trim()).filter(Boolean)
-        : [];
-
-    const normalizedExtras = parseExtraRecipients(extraRecipients);
+    const normalizedFilters = parseCSV(keywordFilters);
+    const normalizedExtras = parseCSV(extraRecipients).map(normalizePhoneNumber);
     const validatedRelayUrl = validateOptionalUrl(webhookRelayUrl?.trim() ?? '', 'Webhook relay URL');
     const validatedEmail = validateOptionalEmail(emailForwardTo?.trim() ?? '');
 

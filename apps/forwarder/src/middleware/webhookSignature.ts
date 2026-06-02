@@ -27,7 +27,12 @@ export function verifyWebhookSignature(req: Request, res: Response, next: NextFu
     return;
   }
 
-  const rawBody = req.rawBody ? req.rawBody.toString('utf8') : JSON.stringify(req.body);
+  if (!req.rawBody) {
+    logger.error('rawBody not available for signature verification — ensure express.json verify callback is configured');
+    res.status(500).json({ error: 'Signature verification unavailable' });
+    return;
+  }
+  const rawBody = req.rawBody.toString('utf8');
   const expectedSignature = `sha256=${crypto
     .createHmac('sha256', appSecret)
     .update(rawBody)

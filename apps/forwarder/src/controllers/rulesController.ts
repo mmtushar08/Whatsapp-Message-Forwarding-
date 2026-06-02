@@ -5,200 +5,73 @@ import {
   countRulesForWorkspace,
   createRule,
   deleteRule,
+  ForwardingRuleInput,
   getRulesForWorkspace,
   updateRule,
 } from '../db/rulesStore';
 import { getLimits } from '../services/planService';
+import { normalizePhoneNumber, parseCSV, validateOptionalEmail, validateOptionalUrl } from '../utils/validation';
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function normalizePhoneNumber(value: string): string {
-  const cleaned = value.replace(/\D/g, '');
-  if (cleaned.length < 7 || cleaned.length > 15) {
-    throw new Error('Phone numbers must be 7-15 digits with country code and no plus sign.');
-  }
-  return cleaned;
+function workspaceId(req: Request): string | null {
+  return req.auth ? (getWorkspaceByUserId(req.auth.userId)?.id ?? null) : null;
 }
 
-function validateOptionalUrl(value: string, label: string): string {
-  if (!value) return '';
-  if (!/^https?:\/\//i.test(value)) throw new Error(`${label} must start with http:// or https://`);
-  return value.trim();
-}
-
-function validateOptionalEmail(value: string): string {
-  if (!value) return '';
-  if (!EMAIL_REGEX.test(value)) throw new Error('Email forwarding address is not a valid email.');
-  return value.trim();
-}
-
-function getWorkspaceIdFromRequest(req: Request): string | null {
-  if (!req.auth) return null;
-  return getWorkspaceByUserId(req.auth.userId)?.id ?? null;
+function parseBody(body: Record<string, unknown>): ForwardingRuleInput {
+  const { name, forwardToNumber, extraRecipients, keywordFilters, forwardingEnabled, webhookRelayUrl, emailForwardTo } = body;
+  if (!name || !forwardToNumber) throw new Error('name and forwardToNumber are required');
+  return {
+    name: String(name).trim(),
+    forwardToNumber: normalizePhoneNumber(String(forwardToNumber)),
+    extraRecipients: parseCSV(extraRecipients as string[] | string | undefined).map(normalizePhoneNumber),
+    keywordFilters: parseCSV(keywordFilters as string[] | string | undefined),
+    forwardingEnabled: forwardingEnabled !== false,
+    webhookRelayUrl: validateOptionalUrl(String(webhookRelayUrl ?? '').trim(), 'Webhook relay URL'),
+    emailForwardTo: validateOptionalEmail(String(emailForwardTo ?? '').trim()),
+  };
 }
 
 export function listRules(req: Request, res: Response): void {
-  const workspaceId = getWorkspaceIdFromRequest(req);
-  if (!workspaceId) {
-    res.status(404).json({ error: 'Workspace not found', onboardingRequired: true });
-    return;
-  }
-  res.status(200).json({ rules: getRulesForWorkspace(workspaceId) });
+  const wsId = workspaceId(req);
+  if (!wsId) { res.status(404).json({ error: 'Workspace not found', onboardingRequired: true }); return; }
+  res.json({ rules: getRulesForWorkspace(wsId) });
 }
 
 export function createRuleHandler(req: Request, res: Response): void {
-  const workspaceId = getWorkspaceIdFromRequest(req);
-  if (!workspaceId || !req.auth) {
-    res.status(404).json({ error: 'Workspace not found', onboardingRequired: true });
-    return;
-  }
+  const wsId = workspaceId(req);
+  if (!wsId || !req.auth) { res.status(404).json({ error: 'Workspace not found', onboardingRequired: true }); return; }
 
-  const owner = getUserById(req.auth.userId);
-  const limits = getLimits(owner?.plan ?? 'free');
-
-  if (limits.maxAdditionalRules !== -1) {
-    const current = countRulesForWorkspace(workspaceId);
-    if (current >= limits.maxAdditionalRules) {
-      res.status(402).json({
-        error: `Your ${limits.label} plan supports up to ${limits.maxAdditionalRules} additional rule${limits.maxAdditionalRules === 1 ? '' : 's'}. Upgrade to Pro for up to 5 total forwarding rules.`,
-        requiredPlan: 'pro',
-      });
-      return;
-    }
-  }
-
-  const { name, forwardToNumber, extraRecipients, keywordFilters, forwardingEnabled, webhookRelayUrl, emailForwardTo } =
-    req.body as {
-      name?: string;
-      forwardToNumber?: string;
-      extraRecipients?: string[] | string;
-      keywordFilters?: string[] | string;
-      forwardingEnabled?: boolean;
-      webhookRelayUrl?: string;
-      emailForwardTo?: string;
-    };
-
-  if (!name || !forwardToNumber) {
-    res.status(400).json({ error: 'name and forwardToNumber are required' });
+  const limits = getLimits(getUserById(req.auth.userId)?.plan ?? 'free');
+  if (limits.maxAdditionalRules !== -1 && countRulesForWorkspace(wsId) >= limits.maxAdditionalRules) {
+    res.status(402).json({ error: 'Upgrade to Pro for multiple forwarding rules.', requiredPlan: 'pro' });
     return;
   }
 
   try {
-    const normalizedTo = normalizePhoneNumber(forwardToNumber);
-    const rawExtras = Array.isArray(extraRecipients)
-      ? extraRecipients
-      : typeof extraRecipients === 'string'
-        ? extraRecipients.split(',')
-        : [];
-    const normalizedExtras = rawExtras.map((v) => v.trim()).filter(Boolean).map(normalizePhoneNumber);
-    const normalizedFilters = Array.isArray(keywordFilters)
-      ? keywordFilters
-      : typeof keywordFilters === 'string'
-        ? keywordFilters.split(',').map((v) => v.trim()).filter(Boolean)
-        : [];
-    const validatedUrl = validateOptionalUrl(webhookRelayUrl?.trim() ?? '', 'Webhook relay URL');
-    const validatedEmail = validateOptionalEmail(emailForwardTo?.trim() ?? '');
-
-    const rule = createRule(workspaceId, {
-      name: name.trim(),
-      forwardToNumber: normalizedTo,
-      extraRecipients: normalizedExtras,
-      keywordFilters: normalizedFilters,
-      forwardingEnabled: forwardingEnabled ?? true,
-      webhookRelayUrl: validatedUrl,
-      emailForwardTo: validatedEmail,
-    });
-
-    res.status(201).json({ rule });
-  } catch (error) {
-    res.status(400).json({ error: (error as Error).message });
+    res.status(201).json({ rule: createRule(wsId, parseBody(req.body as Record<string, unknown>)) });
+  } catch (e) {
+    res.status(400).json({ error: (e as Error).message });
   }
 }
 
 export function updateRuleHandler(req: Request, res: Response): void {
-  const workspaceId = getWorkspaceIdFromRequest(req);
-  if (!workspaceId) {
-    res.status(404).json({ error: 'Workspace not found', onboardingRequired: true });
-    return;
-  }
-
+  const wsId = workspaceId(req);
+  if (!wsId) { res.status(404).json({ error: 'Workspace not found', onboardingRequired: true }); return; }
   const id = parseInt(req.params['id'] as string, 10);
-  if (!id) {
-    res.status(400).json({ error: 'Invalid rule ID' });
-    return;
-  }
-
-  const { name, forwardToNumber, extraRecipients, keywordFilters, forwardingEnabled, webhookRelayUrl, emailForwardTo } =
-    req.body as {
-      name?: string;
-      forwardToNumber?: string;
-      extraRecipients?: string[] | string;
-      keywordFilters?: string[] | string;
-      forwardingEnabled?: boolean;
-      webhookRelayUrl?: string;
-      emailForwardTo?: string;
-    };
-
-  if (!name || !forwardToNumber) {
-    res.status(400).json({ error: 'name and forwardToNumber are required' });
-    return;
-  }
-
+  if (!id) { res.status(400).json({ error: 'Invalid rule ID' }); return; }
   try {
-    const normalizedTo = normalizePhoneNumber(forwardToNumber);
-    const rawExtras = Array.isArray(extraRecipients)
-      ? extraRecipients
-      : typeof extraRecipients === 'string'
-        ? extraRecipients.split(',')
-        : [];
-    const normalizedExtras = rawExtras.map((v) => v.trim()).filter(Boolean).map(normalizePhoneNumber);
-    const normalizedFilters = Array.isArray(keywordFilters)
-      ? keywordFilters
-      : typeof keywordFilters === 'string'
-        ? keywordFilters.split(',').map((v) => v.trim()).filter(Boolean)
-        : [];
-    const validatedUrl = validateOptionalUrl(webhookRelayUrl?.trim() ?? '', 'Webhook relay URL');
-    const validatedEmail = validateOptionalEmail(emailForwardTo?.trim() ?? '');
-
-    const rule = updateRule(id, workspaceId, {
-      name: name.trim(),
-      forwardToNumber: normalizedTo,
-      extraRecipients: normalizedExtras,
-      keywordFilters: normalizedFilters,
-      forwardingEnabled: forwardingEnabled ?? true,
-      webhookRelayUrl: validatedUrl,
-      emailForwardTo: validatedEmail,
-    });
-
-    if (!rule) {
-      res.status(404).json({ error: 'Rule not found' });
-      return;
-    }
-
-    res.status(200).json({ rule });
-  } catch (error) {
-    res.status(400).json({ error: (error as Error).message });
+    const rule = updateRule(id, wsId, parseBody(req.body as Record<string, unknown>));
+    if (!rule) { res.status(404).json({ error: 'Rule not found' }); return; }
+    res.json({ rule });
+  } catch (e) {
+    res.status(400).json({ error: (e as Error).message });
   }
 }
 
 export function deleteRuleHandler(req: Request, res: Response): void {
-  const workspaceId = getWorkspaceIdFromRequest(req);
-  if (!workspaceId) {
-    res.status(404).json({ error: 'Workspace not found', onboardingRequired: true });
-    return;
-  }
-
+  const wsId = workspaceId(req);
+  if (!wsId) { res.status(404).json({ error: 'Workspace not found', onboardingRequired: true }); return; }
   const id = parseInt(req.params['id'] as string, 10);
-  if (!id) {
-    res.status(400).json({ error: 'Invalid rule ID' });
-    return;
-  }
-
-  const deleted = deleteRule(id, workspaceId);
-  if (!deleted) {
-    res.status(404).json({ error: 'Rule not found' });
-    return;
-  }
-
-  res.status(200).json({ success: true });
+  if (!id) { res.status(400).json({ error: 'Invalid rule ID' }); return; }
+  if (!deleteRule(id, wsId)) { res.status(404).json({ error: 'Rule not found' }); return; }
+  res.json({ success: true });
 }
