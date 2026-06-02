@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { resendMessageRequest } from '../api/client';
 import { useProduct } from '../context/ProductContext';
 import type { PrototypeMessageLog } from '../types';
 
@@ -12,6 +13,7 @@ export default function Messages() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [page, setPage] = useState(0);
+  const [retrying, setRetrying] = useState<string | number | null>(null);
   const limit = 20;
 
   async function load(s: string, status: StatusFilter, p: number) {
@@ -49,6 +51,18 @@ export default function Messages() {
   function goPage(p: number) {
     setPage(p);
     void load(search, statusFilter, p);
+  }
+
+  async function handleRetry(msg: PrototypeMessageLog) {
+    setRetrying(msg.id);
+    try {
+      await resendMessageRequest(msg.id);
+      void load(search, statusFilter, page);
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setRetrying(null);
+    }
   }
 
   const totalPages = Math.ceil(total / limit);
@@ -139,7 +153,16 @@ export default function Messages() {
                     {msg.error && <div className="mt-1 text-xs text-rose-600">{msg.error}</div>}
                   </td>
                   <td className="whitespace-nowrap px-6 py-4 text-xs text-stone-500">
-                    {new Date(msg.forwardedAt).toLocaleString()}
+                    <div>{new Date(msg.forwardedAt).toLocaleString()}</div>
+                    {msg.status === 'failed' && (
+                      <button
+                        onClick={() => handleRetry(msg)}
+                        disabled={retrying === msg.id}
+                        className="mt-1 text-xs font-semibold text-emerald-700 hover:underline disabled:opacity-50"
+                      >
+                        {retrying === msg.id ? 'Retrying...' : 'Retry'}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

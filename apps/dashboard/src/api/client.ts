@@ -1,6 +1,8 @@
 import { clearSessionToken, getSessionToken, setSessionToken } from '../lib/session';
 import type {
   BillingStatus,
+  ForwardingRule,
+  ForwardingRuleInput,
   MessageStats,
   MarketplaceUser,
   Pagination,
@@ -224,4 +226,63 @@ export async function cancelSubscription(): Promise<{ success: boolean }> {
 
 export async function testWorkspaceConnection(): Promise<{ success: boolean }> {
   return request<{ success: boolean }>('/app/workspace/test', { method: 'POST' }, true);
+}
+
+export async function fetchRules(): Promise<ForwardingRule[]> {
+  const payload = await request<{ rules: ForwardingRule[] }>('/app/rules', { method: 'GET' }, true);
+  return payload.rules;
+}
+
+export async function createRule(input: ForwardingRuleInput): Promise<ForwardingRule> {
+  const payload = await request<{ rule: ForwardingRule }>(
+    '/app/rules',
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        name: input.name,
+        forwardToNumber: input.forwardToNumber,
+        extraRecipients: input.extraRecipients,
+        keywordFilters: input.keywordFilters
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+        forwardingEnabled: input.forwardingEnabled,
+        webhookRelayUrl: input.webhookRelayUrl,
+        emailForwardTo: input.emailForwardTo,
+      }),
+    },
+    true,
+  );
+  return payload.rule;
+}
+
+export async function updateRule(id: number, input: ForwardingRuleInput): Promise<ForwardingRule> {
+  const payload = await request<{ rule: ForwardingRule }>(
+    `/app/rules/${id}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({
+        name: input.name,
+        forwardToNumber: input.forwardToNumber,
+        extraRecipients: input.extraRecipients,
+        keywordFilters: input.keywordFilters
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+        forwardingEnabled: input.forwardingEnabled,
+        webhookRelayUrl: input.webhookRelayUrl,
+        emailForwardTo: input.emailForwardTo,
+      }),
+    },
+    true,
+  );
+  return payload.rule;
+}
+
+export async function deleteRule(id: number): Promise<void> {
+  await request<{ success: boolean }>(`/app/rules/${id}`, { method: 'DELETE' }, true);
+}
+
+export async function resendMessageRequest(id: string | number): Promise<{ success: boolean }> {
+  return request<{ success: boolean }>(`/app/messages/${id}/resend`, { method: 'POST' }, true);
 }

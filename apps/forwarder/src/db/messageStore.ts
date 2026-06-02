@@ -97,6 +97,14 @@ export function getWorkspaceMessageLogCount(workspaceId: string, filter: Message
   return row.count;
 }
 
+export function getMessageLogByIdAndWorkspace(id: number, workspaceId: string): MessageLog | null {
+  const db = getDatabase();
+  const row = db
+    .prepare('SELECT * FROM message_logs WHERE id = ? AND workspace_id = ?')
+    .get(id, workspaceId) as MessageLog | undefined;
+  return row ?? null;
+}
+
 export function getMessageLogCount(): number {
   const db = getDatabase();
   const row = db.prepare('SELECT COUNT(*) as count FROM message_logs').get() as { count: number };

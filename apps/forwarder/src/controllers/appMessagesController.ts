@@ -3,11 +3,15 @@ import {
   getWorkspaceMessageLogCount,
   getWorkspaceMessageLogs,
   getWorkspaceMessageStats,
+  getMessageLogByIdAndWorkspace,
+  logMessage,
 } from '../db/messageStore';
 import { getCurrentMonthUsage } from '../db/usageStore';
 import { getUserById } from '../db/userStore';
-import { getWorkspaceByUserId } from '../db/workspaceStore';
+import { getWorkspaceByUserId, getWorkspaceRuntimeByUserId } from '../db/workspaceStore';
 import { getLimits } from '../services/planService';
+import { forwardMessageTo } from '../services/whatsappService';
+import logger from '../services/loggerService';
 
 function getWorkspaceIdFromRequest(req: Request): string | null {
   if (!req.auth) {
@@ -42,6 +46,69 @@ export function getWorkspaceMessages(req: Request, res: Response): void {
       hasMore: offset + limit < total,
     },
   });
+}
+
+export async function resendMessage(req: Request, res: Response): Promise<void> {
+  if (!req.auth) {
+    res.status(401).json({ error: 'Unauthorized: missing session' });
+    return;
+  }
+
+  const workspaceId = getWorkspaceIdFromRequest(req);
+  if (!workspaceId) {
+    res.status(404).json({ error: 'Workspace not found', onboardingRequired: true });
+    return;
+  }
+
+  const messageId = parseInt(req.params['id'] as string, 10);
+  if (!messageId) {
+    res.status(400).json({ error: 'Invalid message ID' });
+    return;
+  }
+
+  const original = getMessageLogByIdAndWorkspace(messageId, workspaceId);
+  if (!original) {
+    res.status(404).json({ error: 'Message not found' });
+    return;
+  }
+
+  const runtime = getWorkspaceRuntimeByUserId(req.auth.userId);
+  if (!runtime) {
+    res.status(404).json({ error: 'Workspace credentials not found' });
+    return;
+  }
+
+  try {
+    await forwardMessageTo(original.from_number, original.message, original.to_number, {
+      accessToken: runtime.accessToken,
+      phoneNumberId: runtime.phoneNumberId,
+    });
+
+    logMessage({
+      workspace_id: workspaceId,
+      from_number: original.from_number,
+      to_number: original.to_number,
+      message: original.message,
+      type: original.type,
+      status: 'success',
+    });
+
+    res.status(200).json({ success: true });
+  } catch (error) {
+    logger.error(`Resend failed for message ${messageId}: ${(error as Error).message}`);
+
+    logMessage({
+      workspace_id: workspaceId,
+      from_number: original.from_number,
+      to_number: original.to_number,
+      message: original.message,
+      type: original.type,
+      status: 'failed',
+      error: (error as Error).message,
+    });
+
+    res.status(400).json({ error: (error as Error).message });
+  }
 }
 
 export function getWorkspaceStats(req: Request, res: Response): void {

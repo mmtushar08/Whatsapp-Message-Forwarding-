@@ -6,6 +6,7 @@ import {
   getWorkspaceRuntimeByVerifyToken,
   WorkspaceRuntime,
 } from '../db/workspaceStore';
+import { getRulesForWorkspace } from '../db/rulesStore';
 import { logMessage } from '../db/messageStore';
 import { getForwardToNumber, isForwardingEnabled } from './configController';
 import { passesFilter, passesFilterForKeywords } from '../services/filterService';
@@ -198,6 +199,64 @@ export async function receiveWebhook(req: Request, res: Response): Promise<void>
 
         if (sideEffects.length > 0) {
           await Promise.allSettled(sideEffects);
+        }
+
+        // Process additional forwarding rules for this workspace
+        const additionalRules = getRulesForWorkspace(workspace.id);
+        for (const rule of additionalRules) {
+          if (!rule.forwardingEnabled) continue;
+          if (!passesFilterForKeywords(message.text, rule.keywordFilters)) continue;
+
+          const ruleRecipients = [rule.forwardToNumber, ...rule.extraRecipients].filter(Boolean);
+          const ruleResults = await forwardToMultiple(
+            message.from,
+            message.text,
+            ruleRecipients,
+            { accessToken: workspace.accessToken, phoneNumberId: workspace.phoneNumberId },
+          ).catch((err: Error) => {
+            logger.error(`Rule ${rule.id} (${rule.name}) failed: ${err.message}`);
+            return ruleRecipients.map((to) => ({ to, success: false, error: err.message }));
+          });
+
+          ruleResults.forEach(({ to, success, error }) => {
+            logMessage({
+              workspace_id: workspace.id,
+              from_number: message.from,
+              to_number: to,
+              message: message.text,
+              type: message.type,
+              status: success ? 'success' : 'failed',
+              error,
+            });
+          });
+
+          const ruleSideEffects: Promise<unknown>[] = [];
+          if (rule.webhookRelayUrl) {
+            ruleSideEffects.push(
+              relayToWebhook(rule.webhookRelayUrl, {
+                from: message.from,
+                senderName: message.senderName,
+                message: message.text,
+                type: message.type,
+                receivedAt: new Date().toISOString(),
+                businessLabel: workspace.businessLabel,
+              }),
+            );
+          }
+          if (rule.emailForwardTo) {
+            ruleSideEffects.push(
+              sendForwardEmail({
+                to: rule.emailForwardTo,
+                fromNumber: message.from,
+                senderName: message.senderName,
+                messageText: message.text,
+                businessLabel: workspace.businessLabel,
+              }).catch((err: Error) =>
+                logger.warn(`Rule ${rule.id} email forward failed: ${err.message}`),
+              ),
+            );
+          }
+          if (ruleSideEffects.length > 0) await Promise.allSettled(ruleSideEffects);
         }
       }
     } catch (error) {

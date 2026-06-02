@@ -12,17 +12,42 @@ export interface MarketplaceUser {
 export interface PlanCapabilities {
   monthlyMessages: number;
   maxDestinations: number;
+  maxAdditionalRules: number;
   webhookRelay: boolean;
   emailForward: boolean;
   label: string;
 }
 
 export const PLAN_CAPABILITIES: Record<PlanTier, PlanCapabilities> = {
-  free: { monthlyMessages: 200, maxDestinations: 1, webhookRelay: false, emailForward: false, label: 'Free' },
-  starter: { monthlyMessages: -1, maxDestinations: 1, webhookRelay: false, emailForward: true, label: 'Starter' },
-  pro: { monthlyMessages: -1, maxDestinations: 10, webhookRelay: true, emailForward: true, label: 'Pro' },
-  business: { monthlyMessages: -1, maxDestinations: 999, webhookRelay: true, emailForward: true, label: 'Business' },
+  free: { monthlyMessages: 200, maxDestinations: 1, maxAdditionalRules: 0, webhookRelay: false, emailForward: false, label: 'Free' },
+  starter: { monthlyMessages: -1, maxDestinations: 1, maxAdditionalRules: 0, webhookRelay: false, emailForward: true, label: 'Starter' },
+  pro: { monthlyMessages: -1, maxDestinations: 10, maxAdditionalRules: 4, webhookRelay: true, emailForward: true, label: 'Pro' },
+  business: { monthlyMessages: -1, maxDestinations: 999, maxAdditionalRules: -1, webhookRelay: true, emailForward: true, label: 'Business' },
 };
+
+export interface ForwardingRule {
+  id: number;
+  workspaceId: string;
+  name: string;
+  forwardToNumber: string;
+  extraRecipients: string[];
+  keywordFilters: string[];
+  forwardingEnabled: boolean;
+  webhookRelayUrl: string;
+  emailForwardTo: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ForwardingRuleInput {
+  name: string;
+  forwardToNumber: string;
+  extraRecipients: string[];
+  keywordFilters: string;
+  forwardingEnabled: boolean;
+  webhookRelayUrl: string;
+  emailForwardTo: string;
+}
 
 export interface WorkspaceSetup {
   id: string;

@@ -3,6 +3,7 @@ import type { PlanTier } from '../db/userStore';
 export interface PlanLimits {
   monthlyMessages: number;
   maxDestinations: number;
+  maxAdditionalRules: number;
   webhookRelay: boolean;
   emailForward: boolean;
   priceUsd: number;
@@ -13,6 +14,7 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
   free: {
     monthlyMessages: 200,
     maxDestinations: 1,
+    maxAdditionalRules: 0,
     webhookRelay: false,
     emailForward: false,
     priceUsd: 0,
@@ -21,6 +23,7 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
   starter: {
     monthlyMessages: -1,
     maxDestinations: 1,
+    maxAdditionalRules: 0,
     webhookRelay: false,
     emailForward: true,
     priceUsd: 9,
@@ -29,6 +32,7 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
   pro: {
     monthlyMessages: -1,
     maxDestinations: 10,
+    maxAdditionalRules: 4,
     webhookRelay: true,
     emailForward: true,
     priceUsd: 19,
@@ -37,6 +41,7 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
   business: {
     monthlyMessages: -1,
     maxDestinations: 999,
+    maxAdditionalRules: -1,
     webhookRelay: true,
     emailForward: true,
     priceUsd: 39,

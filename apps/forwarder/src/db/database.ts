@@ -129,6 +129,23 @@ export function initDatabase(): void {
     db.exec(`ALTER TABLE workspaces ADD COLUMN email_forward_to TEXT NOT NULL DEFAULT ''`);
   }
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS forwarding_rules (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      workspace_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      forward_to_number TEXT NOT NULL,
+      extra_recipients TEXT NOT NULL DEFAULT '',
+      keyword_filters TEXT NOT NULL DEFAULT '',
+      forwarding_enabled INTEGER NOT NULL DEFAULT 1,
+      webhook_relay_url TEXT NOT NULL DEFAULT '',
+      email_forward_to TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY(workspace_id) REFERENCES workspaces(id)
+    )
+  `);
+
   const userColumns = db.prepare(`PRAGMA table_info(users)`).all() as Array<{ name: string }>;
   if (!userColumns.some((c) => c.name === 'plan')) {
     db.exec(`ALTER TABLE users ADD COLUMN plan TEXT NOT NULL DEFAULT 'free'`);

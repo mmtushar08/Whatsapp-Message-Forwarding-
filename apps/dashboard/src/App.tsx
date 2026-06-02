@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import Messages from './pages/Messages';
 import Onboarding from './pages/Onboarding';
+import Rules from './pages/Rules';
 import Settings from './pages/Settings';
 import NotFound from './pages/NotFound';
 import Pricing from './pages/Pricing';
@@ -34,6 +35,7 @@ function ProtectedAppShell() {
         <Routes>
           <Route path="/app" element={<Dashboard />} />
           <Route path="/app/messages" element={<Messages />} />
+          <Route path="/app/rules" element={<Rules />} />
           <Route path="/app/settings" element={<Settings />} />
           <Route path="/app/billing" element={<Billing />} />
           <Route path="*" element={<Navigate to="/app" replace />} />
