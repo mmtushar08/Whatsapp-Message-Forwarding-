@@ -13,7 +13,7 @@ import Signup from './pages/Signup';
 import Welcome from './pages/Welcome';
 
 function ProtectedAppShell() {
-  const { bootstrapping, currentUser, workspace } = useProduct();
+  const { bootstrapping, currentUser } = useProduct();
 
   if (bootstrapping) {
     return (
@@ -25,10 +25,6 @@ function ProtectedAppShell() {
 
   if (!currentUser) {
     return <Navigate to="/login" replace />;
-  }
-
-  if (!workspace) {
-    return <Navigate to="/onboarding" replace />;
   }
 
   return (
@@ -48,7 +44,7 @@ function ProtectedAppShell() {
 }
 
 function PublicRoutes() {
-  const { bootstrapping, currentUser, workspace } = useProduct();
+  const { bootstrapping, currentUser } = useProduct();
 
   if (bootstrapping) {
     return (
@@ -65,11 +61,11 @@ function PublicRoutes() {
       <Route path="/pricing" element={<Pricing />} />
       <Route
         path="/signup"
-        element={currentUser ? <Navigate to={workspace ? '/app' : '/onboarding'} replace /> : <Signup />}
+        element={currentUser ? <Navigate to="/app" replace /> : <Signup />}
       />
       <Route
         path="/login"
-        element={currentUser ? <Navigate to={workspace ? '/app' : '/onboarding'} replace /> : <Login />}
+        element={currentUser ? <Navigate to="/app" replace /> : <Login />}
       />
       <Route
         path="/onboarding"

@@ -52,33 +52,54 @@ export function getMessageLogs(limit: number = 50, offset: number = 0): MessageL
     .all(limit, offset) as MessageLog[];
 }
 
+export interface MessageFilter {
+  status?: 'success' | 'failed';
+  search?: string;
+  from?: string;
+}
+
 export function getWorkspaceMessageLogs(
   workspaceId: string,
   limit: number = 50,
   offset: number = 0,
+  filter: MessageFilter = {},
 ): MessageLog[] {
   const db = getDatabase();
+  const conditions: string[] = ['workspace_id = ?'];
+  const params: unknown[] = [workspaceId];
+
+  if (filter.status) { conditions.push('status = ?'); params.push(filter.status); }
+  if (filter.from) { conditions.push('from_number LIKE ?'); params.push(`%${filter.from}%`); }
+  if (filter.search) {
+    conditions.push('(message LIKE ? OR from_number LIKE ? OR to_number LIKE ?)');
+    params.push(`%${filter.search}%`, `%${filter.search}%`, `%${filter.search}%`);
+  }
+  params.push(limit, offset);
   return db
-    .prepare('SELECT * FROM message_logs WHERE workspace_id = ? ORDER BY id DESC LIMIT ? OFFSET ?')
-    .all(workspaceId, limit, offset) as MessageLog[];
+    .prepare(`SELECT * FROM message_logs WHERE ${conditions.join(' AND ')} ORDER BY id DESC LIMIT ? OFFSET ?`)
+    .all(...params) as MessageLog[];
 }
 
-/**
- * Returns the total count of message log records.
- */
-export function getMessageLogCount(): number {
+export function getWorkspaceMessageLogCount(workspaceId: string, filter: MessageFilter = {}): number {
   const db = getDatabase();
+  const conditions: string[] = ['workspace_id = ?'];
+  const params: unknown[] = [workspaceId];
+
+  if (filter.status) { conditions.push('status = ?'); params.push(filter.status); }
+  if (filter.from) { conditions.push('from_number LIKE ?'); params.push(`%${filter.from}%`); }
+  if (filter.search) {
+    conditions.push('(message LIKE ? OR from_number LIKE ? OR to_number LIKE ?)');
+    params.push(`%${filter.search}%`, `%${filter.search}%`, `%${filter.search}%`);
+  }
   const row = db
-    .prepare('SELECT COUNT(*) as count FROM message_logs')
-    .get() as { count: number };
+    .prepare(`SELECT COUNT(*) as count FROM message_logs WHERE ${conditions.join(' AND ')}`)
+    .get(...params) as { count: number };
   return row.count;
 }
 
-export function getWorkspaceMessageLogCount(workspaceId: string): number {
+export function getMessageLogCount(): number {
   const db = getDatabase();
-  const row = db
-    .prepare('SELECT COUNT(*) as count FROM message_logs WHERE workspace_id = ?')
-    .get(workspaceId) as { count: number };
+  const row = db.prepare('SELECT COUNT(*) as count FROM message_logs').get() as { count: number };
   return row.count;
 }
 

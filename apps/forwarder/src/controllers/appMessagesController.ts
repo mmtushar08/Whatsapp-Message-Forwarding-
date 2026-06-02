@@ -26,8 +26,12 @@ export function getWorkspaceMessages(req: Request, res: Response): void {
 
   const limit = Math.min(parseInt((req.query['limit'] as string) ?? '50', 10) || 50, 100);
   const offset = parseInt((req.query['offset'] as string) ?? '0', 10) || 0;
-  const data = getWorkspaceMessageLogs(workspaceId, limit, offset);
-  const total = getWorkspaceMessageLogCount(workspaceId);
+  const status = req.query['status'] as 'success' | 'failed' | undefined;
+  const search = (req.query['search'] as string | undefined)?.trim() || undefined;
+  const from = (req.query['from'] as string | undefined)?.trim() || undefined;
+  const filter = { status, search, from };
+  const data = getWorkspaceMessageLogs(workspaceId, limit, offset, filter);
+  const total = getWorkspaceMessageLogCount(workspaceId, filter);
 
   res.status(200).json({
     data,
