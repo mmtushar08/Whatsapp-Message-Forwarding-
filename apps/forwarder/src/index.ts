@@ -30,7 +30,7 @@ app.use(requestIdMiddleware);
 app.use(
   cors({
     origin: corsOrigin,
-    methods: ['GET', 'POST', 'PATCH'],
+    methods: ['GET', 'POST', 'PATCH', 'DELETE'],
     credentials: true,
   }),
 );
