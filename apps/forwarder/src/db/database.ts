@@ -141,6 +141,18 @@ export function initDatabase(): void {
   }
 
   db.exec(`
+    CREATE TABLE IF NOT EXISTS conversations (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      workspace_id TEXT NOT NULL,
+      from_number  TEXT NOT NULL,
+      role         TEXT NOT NULL CHECK(role IN ('user','assistant')),
+      content      TEXT NOT NULL,
+      created_at   TEXT NOT NULL
+    )
+  `);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_conversations_thread ON conversations(workspace_id, from_number, created_at)`);
+
+  db.exec(`
     CREATE TABLE IF NOT EXISTS forwarding_rules (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       workspace_id TEXT NOT NULL,

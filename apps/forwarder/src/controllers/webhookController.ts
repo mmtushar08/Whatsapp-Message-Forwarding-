@@ -8,6 +8,7 @@ import {
 } from '../db/workspaceStore';
 import { getRulesForWorkspace } from '../db/rulesStore';
 import { logMessage } from '../db/messageStore';
+import { appendMessage, clearHistory, getHistory } from '../db/conversationStore';
 import { getForwardToNumber, isForwardingEnabled } from './configController';
 import { passesFilter, passesFilterForKeywords } from '../services/filterService';
 import logger from '../services/loggerService';
@@ -185,11 +186,24 @@ export async function receiveWebhook(req: Request, res: Response): Promise<void>
         await runSideEffects(workspace.webhookRelayUrl, workspace.emailForwardTo, message, workspace.businessLabel);
 
         if (workspace.autoReplyEnabled) {
-          const reply = await generateReply(workspace.autoReplyPrompt, message.text).catch(() => null);
-          if (reply) {
-            await sendDirectMessage(message.from, reply, { accessToken: workspace.accessToken, phoneNumberId: workspace.phoneNumberId })
-              .catch((e: Error) => logger.warn(`AI auto-reply send failed: ${e.message}`));
-            logger.info(`AI auto-reply sent to ${maskPhoneNumber(message.from)}`);
+          const creds = { accessToken: workspace.accessToken, phoneNumberId: workspace.phoneNumberId };
+
+          // "human" keyword → clear thread and hand off to live agent
+          if (message.text.trim().toLowerCase() === 'human') {
+            clearHistory(workspace.id, message.from);
+            await sendDirectMessage(message.from, '✋ Connecting you to a live agent. Please wait.', creds)
+              .catch((e: Error) => logger.warn(`Handoff message failed: ${e.message}`));
+            logger.info(`Chatbot handoff triggered by ${maskPhoneNumber(message.from)}`);
+          } else {
+            const history = getHistory(workspace.id, message.from);
+            appendMessage(workspace.id, message.from, 'user', message.text);
+            const reply = await generateReply(workspace.autoReplyPrompt, history, message.text).catch(() => null);
+            if (reply) {
+              appendMessage(workspace.id, message.from, 'assistant', reply);
+              await sendDirectMessage(message.from, reply, creds)
+                .catch((e: Error) => logger.warn(`Chatbot reply send failed: ${e.message}`));
+              logger.info(`Chatbot replied to ${maskPhoneNumber(message.from)} (${history.length + 1} turns)`);
+            }
           }
         }
 

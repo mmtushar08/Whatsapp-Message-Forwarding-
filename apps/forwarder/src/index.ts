@@ -3,6 +3,7 @@ import express, { Request } from 'express';
 import path from 'path';
 import config from './config';
 import { getDatabase, initDatabase } from './db/database';
+import { pruneExpiredThreads } from './db/conversationStore';
 import { isEmailConfigured } from './services/emailService';
 import logger from './services/loggerService';
 import { requestIdMiddleware } from './middleware/requestId';
@@ -77,6 +78,8 @@ app.use((_req, res) => {
 
 if (require.main === module) {
   initDatabase();
+  // Prune expired conversation threads once per hour
+  setInterval(pruneExpiredThreads, 60 * 60 * 1000);
   const server = app.listen(config.port, () => {
     logger.info(`WhatsApp Forwarder started on port ${config.port}`);
     logger.info(`Dashboard: http://localhost:${config.port}/`);
