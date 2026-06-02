@@ -184,7 +184,9 @@ export async function receiveWebhook(req: Request, res: Response): Promise<void>
         await runSideEffects(workspace.webhookRelayUrl, workspace.emailForwardTo, message, workspace.businessLabel);
 
         for (const rule of getRulesForWorkspace(workspace.id)) {
-          if (!rule.forwardingEnabled || !passesFilterForKeywords(message.text, rule.keywordFilters)) continue;
+          if (!rule.forwardingEnabled) continue;
+          if (!passesFilterForKeywords(message.text, rule.keywordFilters)) continue;
+          if (rule.allowedSenders.length > 0 && !rule.allowedSenders.includes(message.from)) continue;
 
           const recipients = [rule.forwardToNumber, ...rule.extraRecipients].filter(Boolean);
           const ruleResults = await forwardToMultiple(message.from, message.text, recipients, { accessToken: workspace.accessToken, phoneNumberId: workspace.phoneNumberId })

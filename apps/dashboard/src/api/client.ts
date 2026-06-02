@@ -242,10 +242,8 @@ export async function createRule(input: ForwardingRuleInput): Promise<Forwarding
         name: input.name,
         forwardToNumber: input.forwardToNumber,
         extraRecipients: input.extraRecipients,
-        keywordFilters: input.keywordFilters
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean),
+        keywordFilters: input.keywordFilters.split(',').map((s) => s.trim()).filter(Boolean),
+        allowedSenders: input.allowedSenders.split(',').map((s) => s.trim()).filter(Boolean),
         forwardingEnabled: input.forwardingEnabled,
         webhookRelayUrl: input.webhookRelayUrl,
         emailForwardTo: input.emailForwardTo,
@@ -265,10 +263,8 @@ export async function updateRule(id: number, input: ForwardingRuleInput): Promis
         name: input.name,
         forwardToNumber: input.forwardToNumber,
         extraRecipients: input.extraRecipients,
-        keywordFilters: input.keywordFilters
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean),
+        keywordFilters: input.keywordFilters.split(',').map((s) => s.trim()).filter(Boolean),
+        allowedSenders: input.allowedSenders.split(',').map((s) => s.trim()).filter(Boolean),
         forwardingEnabled: input.forwardingEnabled,
         webhookRelayUrl: input.webhookRelayUrl,
         emailForwardTo: input.emailForwardTo,

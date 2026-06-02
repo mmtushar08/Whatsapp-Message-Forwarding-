@@ -7,6 +7,7 @@ export interface ForwardingRuleRecord {
   forward_to_number: string;
   extra_recipients: string;
   keyword_filters: string;
+  allowed_senders: string;
   forwarding_enabled: number;
   webhook_relay_url: string;
   email_forward_to: string;
@@ -21,6 +22,7 @@ export interface ForwardingRuleView {
   forwardToNumber: string;
   extraRecipients: string[];
   keywordFilters: string[];
+  allowedSenders: string[];
   forwardingEnabled: boolean;
   webhookRelayUrl: string;
   emailForwardTo: string;
@@ -33,9 +35,14 @@ export interface ForwardingRuleInput {
   forwardToNumber: string;
   extraRecipients: string[];
   keywordFilters: string[];
+  allowedSenders: string[];
   forwardingEnabled: boolean;
   webhookRelayUrl: string;
   emailForwardTo: string;
+}
+
+function csv(s: string): string[] {
+  return s.split(',').map((v) => v.trim()).filter(Boolean);
 }
 
 function toView(record: ForwardingRuleRecord): ForwardingRuleView {
@@ -44,8 +51,9 @@ function toView(record: ForwardingRuleRecord): ForwardingRuleView {
     workspaceId: record.workspace_id,
     name: record.name,
     forwardToNumber: record.forward_to_number,
-    extraRecipients: record.extra_recipients.split(',').map((s) => s.trim()).filter(Boolean),
-    keywordFilters: record.keyword_filters.split(',').map((s) => s.trim()).filter(Boolean),
+    extraRecipients: csv(record.extra_recipients),
+    keywordFilters: csv(record.keyword_filters),
+    allowedSenders: csv(record.allowed_senders ?? ''),
     forwardingEnabled: record.forwarding_enabled === 1,
     webhookRelayUrl: record.webhook_relay_url,
     emailForwardTo: record.email_forward_to,
@@ -85,8 +93,8 @@ export function createRule(workspaceId: string, input: ForwardingRuleInput): For
     .prepare(
       `INSERT INTO forwarding_rules
         (workspace_id, name, forward_to_number, extra_recipients, keyword_filters,
-         forwarding_enabled, webhook_relay_url, email_forward_to, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         allowed_senders, forwarding_enabled, webhook_relay_url, email_forward_to, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       workspaceId,
@@ -94,6 +102,7 @@ export function createRule(workspaceId: string, input: ForwardingRuleInput): For
       input.forwardToNumber,
       input.extraRecipients.join(','),
       input.keywordFilters.join(','),
+      input.allowedSenders.join(','),
       input.forwardingEnabled ? 1 : 0,
       input.webhookRelayUrl,
       input.emailForwardTo,
@@ -117,7 +126,7 @@ export function updateRule(
     .prepare(
       `UPDATE forwarding_rules SET
         name = ?, forward_to_number = ?, extra_recipients = ?, keyword_filters = ?,
-        forwarding_enabled = ?, webhook_relay_url = ?, email_forward_to = ?, updated_at = ?
+        allowed_senders = ?, forwarding_enabled = ?, webhook_relay_url = ?, email_forward_to = ?, updated_at = ?
        WHERE id = ? AND workspace_id = ?`,
     )
     .run(
@@ -125,6 +134,7 @@ export function updateRule(
       input.forwardToNumber,
       input.extraRecipients.join(','),
       input.keywordFilters.join(','),
+      input.allowedSenders.join(','),
       input.forwardingEnabled ? 1 : 0,
       input.webhookRelayUrl,
       input.emailForwardTo,

@@ -32,6 +32,7 @@ export interface ForwardingRule {
   forwardToNumber: string;
   extraRecipients: string[];
   keywordFilters: string[];
+  allowedSenders: string[];
   forwardingEnabled: boolean;
   webhookRelayUrl: string;
   emailForwardTo: string;
@@ -44,6 +45,7 @@ export interface ForwardingRuleInput {
   forwardToNumber: string;
   extraRecipients: string[];
   keywordFilters: string;
+  allowedSenders: string;
   forwardingEnabled: boolean;
   webhookRelayUrl: string;
   emailForwardTo: string;

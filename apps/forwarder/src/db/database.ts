@@ -107,6 +107,11 @@ export function initDatabase(): void {
     )
   `);
 
+  const ruleColumns = db.prepare(`PRAGMA table_info(forwarding_rules)`).all() as Array<{ name: string }>;
+  if (!ruleColumns.some((c) => c.name === 'allowed_senders')) {
+    db.exec(`ALTER TABLE forwarding_rules ADD COLUMN allowed_senders TEXT NOT NULL DEFAULT ''`);
+  }
+
   const messageLogColumns = db
     .prepare(`PRAGMA table_info(message_logs)`)
     .all() as Array<{ name: string }>;

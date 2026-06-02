@@ -7,7 +7,7 @@ import { PLAN_CAPABILITIES } from '../types';
 
 const EMPTY: ForwardingRuleInput = {
   name: '', forwardToNumber: '', extraRecipients: [],
-  keywordFilters: '', forwardingEnabled: true, webhookRelayUrl: '', emailForwardTo: '',
+  keywordFilters: '', allowedSenders: '', forwardingEnabled: true, webhookRelayUrl: '', emailForwardTo: '',
 };
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
@@ -43,6 +43,9 @@ function RuleForm({ initial, onSave, onCancel, saving, error }: {
       </div>
       <Field label="Keyword filters (optional)" hint="Comma-separated. Leave blank to match all messages.">
         <input className="w-full rounded-2xl border border-stone-300 px-4 py-3 text-sm outline-none focus:border-emerald-600" value={f.keywordFilters} onChange={(e) => set('keywordFilters', e.target.value)} placeholder="urgent, invoice" />
+      </Field>
+      <Field label="Allowed senders (optional)" hint="Comma-separated phone numbers with country code, no +. Leave blank to accept from anyone.">
+        <input className="w-full rounded-2xl border border-stone-300 px-4 py-3 text-sm outline-none focus:border-emerald-600" value={f.allowedSenders} onChange={(e) => set('allowedSenders', e.target.value)} placeholder="919876543210, 15551234567" />
       </Field>
       <div className="grid gap-4 md:grid-cols-2">
         <Field label="Webhook relay URL (optional)">
@@ -81,6 +84,7 @@ function RuleCard({ rule, onEdit, onDelete, deleting }: { rule: ForwardingRule; 
             {rule.extraRecipients.length > 0 && <span className="ml-1 text-stone-400">+{rule.extraRecipients.length} more</span>}
           </p>
           {rule.keywordFilters.length > 0 && <p className="mt-1 text-xs text-stone-500">Keywords: {rule.keywordFilters.join(', ')}</p>}
+          {rule.allowedSenders.length > 0 && <p className="mt-1 text-xs text-stone-500">Senders: {rule.allowedSenders.map((s) => `+${s}`).join(', ')}</p>}
           <div className="mt-1.5 flex flex-wrap gap-2">
             {rule.webhookRelayUrl && <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-600">Webhook relay</span>}
             {rule.emailForwardTo && <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-600">Email: {rule.emailForwardTo}</span>}
@@ -188,7 +192,7 @@ export default function Rules() {
         <div className="rounded-[2rem] border border-stone-200 bg-white p-6 shadow-sm">
           <p className="mb-4 font-mono text-xs uppercase tracking-[0.25em] text-emerald-700">{editing ? 'Edit rule' : 'New rule'}</p>
           <RuleForm
-            initial={editing ? { name: editing.name, forwardToNumber: editing.forwardToNumber, extraRecipients: editing.extraRecipients, keywordFilters: editing.keywordFilters.join(', '), forwardingEnabled: editing.forwardingEnabled, webhookRelayUrl: editing.webhookRelayUrl, emailForwardTo: editing.emailForwardTo } : EMPTY}
+            initial={editing ? { name: editing.name, forwardToNumber: editing.forwardToNumber, extraRecipients: editing.extraRecipients, keywordFilters: editing.keywordFilters.join(', '), allowedSenders: editing.allowedSenders.join(', '), forwardingEnabled: editing.forwardingEnabled, webhookRelayUrl: editing.webhookRelayUrl, emailForwardTo: editing.emailForwardTo } : EMPTY}
             onSave={handleSave}
             onCancel={() => { setShowForm(false); setEditing(null); setFormError(null); }}
             saving={saving}

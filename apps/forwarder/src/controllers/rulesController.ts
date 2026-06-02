@@ -17,13 +17,14 @@ function workspaceId(req: Request): string | null {
 }
 
 function parseBody(body: Record<string, unknown>): ForwardingRuleInput {
-  const { name, forwardToNumber, extraRecipients, keywordFilters, forwardingEnabled, webhookRelayUrl, emailForwardTo } = body;
+  const { name, forwardToNumber, extraRecipients, keywordFilters, allowedSenders, forwardingEnabled, webhookRelayUrl, emailForwardTo } = body;
   if (!name || !forwardToNumber) throw new Error('name and forwardToNumber are required');
   return {
     name: String(name).trim(),
     forwardToNumber: normalizePhoneNumber(String(forwardToNumber)),
     extraRecipients: parseCSV(extraRecipients as string[] | string | undefined).map(normalizePhoneNumber),
     keywordFilters: parseCSV(keywordFilters as string[] | string | undefined),
+    allowedSenders: parseCSV(allowedSenders as string[] | string | undefined).map(normalizePhoneNumber),
     forwardingEnabled: forwardingEnabled !== false,
     webhookRelayUrl: validateOptionalUrl(String(webhookRelayUrl ?? '').trim(), 'Webhook relay URL'),
     emailForwardTo: validateOptionalEmail(String(emailForwardTo ?? '').trim()),
