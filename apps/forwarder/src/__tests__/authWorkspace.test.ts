@@ -36,6 +36,11 @@ const SCHEMA = `
     name TEXT NOT NULL,
     email TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
+    plan TEXT NOT NULL DEFAULT 'free',
+    razorpay_customer_id TEXT NOT NULL DEFAULT '',
+    razorpay_subscription_id TEXT NOT NULL DEFAULT '',
+    plan_started_at TEXT NOT NULL DEFAULT '',
+    plan_expires_at TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   );
@@ -57,13 +62,46 @@ const SCHEMA = `
     app_secret_encrypted TEXT,
     access_token_preview TEXT NOT NULL,
     forward_to_number TEXT NOT NULL,
+    extra_recipients TEXT NOT NULL DEFAULT '',
     keyword_filters TEXT NOT NULL,
     forwarding_enabled INTEGER NOT NULL DEFAULT 1,
     webhook_verify_token TEXT NOT NULL,
     webhook_url TEXT NOT NULL,
+    webhook_relay_url TEXT NOT NULL DEFAULT '',
+    email_forward_to TEXT NOT NULL DEFAULT '',
+    auto_reply_enabled INTEGER NOT NULL DEFAULT 0,
+    auto_reply_prompt TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS usage_counters (
+    workspace_id TEXT NOT NULL,
+    year_month TEXT NOT NULL,
+    message_count INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (workspace_id, year_month)
+  );
+  CREATE TABLE IF NOT EXISTS forwarding_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    workspace_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    forward_to_number TEXT NOT NULL,
+    extra_recipients TEXT NOT NULL DEFAULT '',
+    keyword_filters TEXT NOT NULL DEFAULT '',
+    forwarding_enabled INTEGER NOT NULL DEFAULT 1,
+    webhook_relay_url TEXT NOT NULL DEFAULT '',
+    email_forward_to TEXT NOT NULL DEFAULT '',
+    allowed_senders TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS conversations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    workspace_id TEXT NOT NULL,
+    from_number TEXT NOT NULL,
+    role TEXT NOT NULL CHECK(role IN ('user','assistant')),
+    content TEXT NOT NULL,
+    created_at TEXT NOT NULL
   );
 `;
 

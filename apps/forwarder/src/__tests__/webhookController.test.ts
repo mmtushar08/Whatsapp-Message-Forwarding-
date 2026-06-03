@@ -1,4 +1,13 @@
 import request from 'supertest';
+
+jest.mock('../db/workspaceStore', () => ({
+  getWorkspaceRuntimeByVerifyToken: jest.fn().mockReturnValue(null),
+  getWorkspaceRuntimeByPhoneNumberId: jest.fn().mockReturnValue(null),
+  getWorkspaceRuntimeByUserId: jest.fn().mockReturnValue(null),
+  getWorkspaceByUserId: jest.fn().mockReturnValue(null),
+  upsertWorkspace: jest.fn(),
+}));
+
 import app from '../index';
 
 describe('webhookController', () => {

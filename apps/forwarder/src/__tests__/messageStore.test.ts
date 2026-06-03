@@ -19,6 +19,7 @@ import {
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS message_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    workspace_id TEXT,
     from_number TEXT NOT NULL,
     to_number TEXT NOT NULL,
     message TEXT NOT NULL,
