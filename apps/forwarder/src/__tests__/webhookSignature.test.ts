@@ -5,7 +5,7 @@ import config from '../config';
 
 // Helper to create a mock Express request
 function makeReq(body: object, headers: Record<string, string> = {}): Partial<Request> {
-  return { body, headers } as Partial<Request>;
+  return { body, headers, rawBody: Buffer.from(JSON.stringify(body)) } as Partial<Request>;
 }
 
 // Helper to create a mock Express response

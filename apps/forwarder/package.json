@@ -17,6 +17,7 @@
     "test:coverage": "jest --coverage"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.100.1",
     "@whatsapp-forwarder/shared": "^1.0.0",
     "axios": "^1.6.7",
     "better-sqlite3": "^12.8.0",

@@ -107,15 +107,16 @@ export function initDatabase(): void {
     )
   `);
 
-  const messageLogColumns = db
-    .prepare(`PRAGMA table_info(message_logs)`)
-    .all() as Array<{ name: string }>;
-
+  const messageLogColumns = db.prepare(`PRAGMA table_info(message_logs)`).all() as Array<{
+    name: string;
+  }>;
   if (!messageLogColumns.some((column) => column.name === 'workspace_id')) {
     db.exec(`ALTER TABLE message_logs ADD COLUMN workspace_id TEXT`);
   }
 
-  const workspaceColumns = db.prepare(`PRAGMA table_info(workspaces)`).all() as Array<{ name: string }>;
+  const workspaceColumns = db.prepare(`PRAGMA table_info(workspaces)`).all() as Array<{
+    name: string;
+  }>;
   if (!workspaceColumns.some((c) => c.name === 'app_secret_encrypted')) {
     db.exec(`ALTER TABLE workspaces ADD COLUMN app_secret_encrypted TEXT`);
   }
@@ -127,6 +128,51 @@ export function initDatabase(): void {
   }
   if (!workspaceColumns.some((c) => c.name === 'email_forward_to')) {
     db.exec(`ALTER TABLE workspaces ADD COLUMN email_forward_to TEXT NOT NULL DEFAULT ''`);
+  }
+  if (!workspaceColumns.some((c) => c.name === 'auto_reply_enabled')) {
+    db.exec(`ALTER TABLE workspaces ADD COLUMN auto_reply_enabled INTEGER NOT NULL DEFAULT 0`);
+  }
+  if (!workspaceColumns.some((c) => c.name === 'auto_reply_prompt')) {
+    db.exec(`ALTER TABLE workspaces ADD COLUMN auto_reply_prompt TEXT NOT NULL DEFAULT ''`);
+  }
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS conversations (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      workspace_id TEXT NOT NULL,
+      from_number  TEXT NOT NULL,
+      role         TEXT NOT NULL CHECK(role IN ('user','assistant')),
+      content      TEXT NOT NULL,
+      created_at   TEXT NOT NULL
+    )
+  `);
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_conversations_thread ON conversations(workspace_id, from_number, created_at)`,
+  );
+
+  // forwarding_rules must be created BEFORE the allowed_senders migration check below
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS forwarding_rules (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      workspace_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      forward_to_number TEXT NOT NULL,
+      extra_recipients TEXT NOT NULL DEFAULT '',
+      keyword_filters TEXT NOT NULL DEFAULT '',
+      forwarding_enabled INTEGER NOT NULL DEFAULT 1,
+      webhook_relay_url TEXT NOT NULL DEFAULT '',
+      email_forward_to TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY(workspace_id) REFERENCES workspaces(id)
+    )
+  `);
+
+  const ruleColumns = db.prepare(`PRAGMA table_info(forwarding_rules)`).all() as Array<{
+    name: string;
+  }>;
+  if (!ruleColumns.some((c) => c.name === 'allowed_senders')) {
+    db.exec(`ALTER TABLE forwarding_rules ADD COLUMN allowed_senders TEXT NOT NULL DEFAULT ''`);
   }
 
   const userColumns = db.prepare(`PRAGMA table_info(users)`).all() as Array<{ name: string }>;

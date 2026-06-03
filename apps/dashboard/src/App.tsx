@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import Messages from './pages/Messages';
 import Onboarding from './pages/Onboarding';
+import Rules from './pages/Rules';
 import Settings from './pages/Settings';
 import NotFound from './pages/NotFound';
 import Pricing from './pages/Pricing';
@@ -13,7 +14,7 @@ import Signup from './pages/Signup';
 import Welcome from './pages/Welcome';
 
 function ProtectedAppShell() {
-  const { bootstrapping, currentUser, workspace } = useProduct();
+  const { bootstrapping, currentUser } = useProduct();
 
   if (bootstrapping) {
     return (
@@ -27,10 +28,6 @@ function ProtectedAppShell() {
     return <Navigate to="/login" replace />;
   }
 
-  if (!workspace) {
-    return <Navigate to="/onboarding" replace />;
-  }
-
   return (
     <div className="min-h-screen bg-stone-100">
       <Navbar />
@@ -38,6 +35,7 @@ function ProtectedAppShell() {
         <Routes>
           <Route path="/app" element={<Dashboard />} />
           <Route path="/app/messages" element={<Messages />} />
+          <Route path="/app/rules" element={<Rules />} />
           <Route path="/app/settings" element={<Settings />} />
           <Route path="/app/billing" element={<Billing />} />
           <Route path="*" element={<Navigate to="/app" replace />} />
@@ -48,7 +46,7 @@ function ProtectedAppShell() {
 }
 
 function PublicRoutes() {
-  const { bootstrapping, currentUser, workspace } = useProduct();
+  const { bootstrapping, currentUser } = useProduct();
 
   if (bootstrapping) {
     return (
@@ -65,11 +63,11 @@ function PublicRoutes() {
       <Route path="/pricing" element={<Pricing />} />
       <Route
         path="/signup"
-        element={currentUser ? <Navigate to={workspace ? '/app' : '/onboarding'} replace /> : <Signup />}
+        element={currentUser ? <Navigate to="/app" replace /> : <Signup />}
       />
       <Route
         path="/login"
-        element={currentUser ? <Navigate to={workspace ? '/app' : '/onboarding'} replace /> : <Login />}
+        element={currentUser ? <Navigate to="/app" replace /> : <Login />}
       />
       <Route
         path="/onboarding"

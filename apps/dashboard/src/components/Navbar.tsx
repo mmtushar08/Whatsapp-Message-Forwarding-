@@ -32,6 +32,9 @@ export default function Navbar() {
           <NavLink to="/app/messages" className={navLinkClass}>
             Logs
           </NavLink>
+          <NavLink to="/app/rules" className={navLinkClass}>
+            Rules
+          </NavLink>
           <NavLink to="/app/settings" className={navLinkClass}>
             Settings
           </NavLink>

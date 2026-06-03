@@ -12,17 +12,45 @@ export interface MarketplaceUser {
 export interface PlanCapabilities {
   monthlyMessages: number;
   maxDestinations: number;
+  maxAdditionalRules: number;
   webhookRelay: boolean;
   emailForward: boolean;
+  aiAutoReply: boolean;
   label: string;
 }
 
 export const PLAN_CAPABILITIES: Record<PlanTier, PlanCapabilities> = {
-  free: { monthlyMessages: 200, maxDestinations: 1, webhookRelay: false, emailForward: false, label: 'Free' },
-  starter: { monthlyMessages: -1, maxDestinations: 1, webhookRelay: false, emailForward: true, label: 'Starter' },
-  pro: { monthlyMessages: -1, maxDestinations: 10, webhookRelay: true, emailForward: true, label: 'Pro' },
-  business: { monthlyMessages: -1, maxDestinations: 999, webhookRelay: true, emailForward: true, label: 'Business' },
+  free:     { monthlyMessages: 200,  maxDestinations: 1,   maxAdditionalRules: 0,  webhookRelay: false, emailForward: false, aiAutoReply: false, label: 'Free' },
+  starter:  { monthlyMessages: -1,   maxDestinations: 1,   maxAdditionalRules: 0,  webhookRelay: false, emailForward: true,  aiAutoReply: false, label: 'Starter' },
+  pro:      { monthlyMessages: -1,   maxDestinations: 10,  maxAdditionalRules: 4,  webhookRelay: true,  emailForward: true,  aiAutoReply: true,  label: 'Pro' },
+  business: { monthlyMessages: -1,   maxDestinations: 999, maxAdditionalRules: -1, webhookRelay: true,  emailForward: true,  aiAutoReply: true,  label: 'Business' },
 };
+
+export interface ForwardingRule {
+  id: number;
+  workspaceId: string;
+  name: string;
+  forwardToNumber: string;
+  extraRecipients: string[];
+  keywordFilters: string[];
+  allowedSenders: string[];
+  forwardingEnabled: boolean;
+  webhookRelayUrl: string;
+  emailForwardTo: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ForwardingRuleInput {
+  name: string;
+  forwardToNumber: string;
+  extraRecipients: string[];
+  keywordFilters: string;
+  allowedSenders: string;
+  forwardingEnabled: boolean;
+  webhookRelayUrl: string;
+  emailForwardTo: string;
+}
 
 export interface WorkspaceSetup {
   id: string;
@@ -40,6 +68,8 @@ export interface WorkspaceSetup {
   webhookUrl: string;
   webhookRelayUrl: string;
   emailForwardTo: string;
+  autoReplyEnabled: boolean;
+  autoReplyPrompt: string;
   status: 'needs_webhook_setup' | 'connected';
   updatedAt: string;
 }
@@ -56,6 +86,8 @@ export interface WorkspaceSettingsInput {
   forwardingEnabled: boolean;
   webhookRelayUrl: string;
   emailForwardTo: string;
+  autoReplyEnabled: boolean;
+  autoReplyPrompt: string;
 }
 
 export interface PrototypeMessageLog {

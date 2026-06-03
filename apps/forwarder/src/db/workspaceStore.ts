@@ -18,6 +18,8 @@ export interface WorkspaceRecord {
   webhook_url: string;
   webhook_relay_url: string;
   email_forward_to: string;
+  auto_reply_enabled: number;
+  auto_reply_prompt: string;
   status: string;
   created_at: string;
   updated_at: string;
@@ -38,6 +40,8 @@ export interface WorkspaceView {
   webhookUrl: string;
   webhookRelayUrl: string;
   emailForwardTo: string;
+  autoReplyEnabled: boolean;
+  autoReplyPrompt: string;
   status: string;
   updatedAt: string;
 }
@@ -54,6 +58,8 @@ export interface WorkspaceInput {
   forwardingEnabled: boolean;
   webhookRelayUrl: string;
   emailForwardTo: string;
+  autoReplyEnabled: boolean;
+  autoReplyPrompt: string;
   webhookBaseUrl?: string;
 }
 
@@ -73,11 +79,16 @@ export interface WorkspaceRuntime {
   webhookUrl: string;
   webhookRelayUrl: string;
   emailForwardTo: string;
+  autoReplyEnabled: boolean;
+  autoReplyPrompt: string;
   status: string;
 }
 
 function parseCSV(value: string): string[] {
-  return value.split(',').map((s) => s.trim()).filter(Boolean);
+  return value
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 function toWorkspaceView(record: WorkspaceRecord): WorkspaceView {
@@ -96,6 +107,8 @@ function toWorkspaceView(record: WorkspaceRecord): WorkspaceView {
     webhookUrl: record.webhook_url,
     webhookRelayUrl: record.webhook_relay_url ?? '',
     emailForwardTo: record.email_forward_to ?? '',
+    autoReplyEnabled: record.auto_reply_enabled === 1,
+    autoReplyPrompt: record.auto_reply_prompt ?? '',
     status: record.status,
     updatedAt: record.updated_at,
   };
@@ -118,23 +131,25 @@ function toWorkspaceRuntime(record: WorkspaceRecord): WorkspaceRuntime {
     webhookUrl: record.webhook_url,
     webhookRelayUrl: record.webhook_relay_url ?? '',
     emailForwardTo: record.email_forward_to ?? '',
+    autoReplyEnabled: record.auto_reply_enabled === 1,
+    autoReplyPrompt: record.auto_reply_prompt ?? '',
     status: record.status,
   };
 }
 
 export function getWorkspaceByUserId(userId: string): WorkspaceView | null {
   const db = getDatabase();
-  const record = db
-    .prepare('SELECT * FROM workspaces WHERE user_id = ?')
-    .get(userId) as WorkspaceRecord | undefined;
+  const record = db.prepare('SELECT * FROM workspaces WHERE user_id = ?').get(userId) as
+    | WorkspaceRecord
+    | undefined;
   return record ? toWorkspaceView(record) : null;
 }
 
 export function upsertWorkspace(userId: string, input: WorkspaceInput): WorkspaceView {
   const db = getDatabase();
-  const existing = db
-    .prepare('SELECT * FROM workspaces WHERE user_id = ?')
-    .get(userId) as WorkspaceRecord | undefined;
+  const existing = db.prepare('SELECT * FROM workspaces WHERE user_id = ?').get(userId) as
+    | WorkspaceRecord
+    | undefined;
   const timestamp = new Date().toISOString();
   const workspaceId = existing?.id ?? createId('workspace');
   const verifyToken = existing?.webhook_verify_token ?? createId('verify');
@@ -152,7 +167,7 @@ export function upsertWorkspace(userId: string, input: WorkspaceInput): Workspac
   const encryptedAppSecret =
     input.appSecret && input.appSecret.trim().length > 0
       ? encryptSecret(input.appSecret.trim())
-      : existing?.app_secret_encrypted ?? null;
+      : (existing?.app_secret_encrypted ?? null);
 
   if (!encryptedAccessToken || !accessTokenPreview) {
     throw new Error('Access token is required when creating a workspace.');
@@ -164,8 +179,9 @@ export function upsertWorkspace(userId: string, input: WorkspaceInput): Workspac
       access_token_encrypted, app_secret_encrypted, access_token_preview,
       forward_to_number, extra_recipients, keyword_filters,
       forwarding_enabled, webhook_verify_token, webhook_url,
-      webhook_relay_url, email_forward_to, status, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      webhook_relay_url, email_forward_to, auto_reply_enabled, auto_reply_prompt,
+      status, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id) DO UPDATE SET
       business_label = excluded.business_label,
       source_phone_number = excluded.source_phone_number,
@@ -179,6 +195,8 @@ export function upsertWorkspace(userId: string, input: WorkspaceInput): Workspac
       forwarding_enabled = excluded.forwarding_enabled,
       webhook_relay_url = excluded.webhook_relay_url,
       email_forward_to = excluded.email_forward_to,
+      auto_reply_enabled = excluded.auto_reply_enabled,
+      auto_reply_prompt = excluded.auto_reply_prompt,
       status = excluded.status,
       updated_at = excluded.updated_at`,
   ).run(
@@ -198,12 +216,22 @@ export function upsertWorkspace(userId: string, input: WorkspaceInput): Workspac
     webhookUrl,
     input.webhookRelayUrl.trim(),
     input.emailForwardTo.trim(),
+    input.autoReplyEnabled ? 1 : 0,
+    input.autoReplyPrompt.trim(),
     'needs_webhook_setup',
     existing?.created_at ?? timestamp,
     timestamp,
   );
 
   return getWorkspaceByUserId(userId) as WorkspaceView;
+}
+
+export function getWorkspaceRuntimeByUserId(userId: string): WorkspaceRuntime | null {
+  const db = getDatabase();
+  const record = db.prepare('SELECT * FROM workspaces WHERE user_id = ?').get(userId) as
+    | WorkspaceRecord
+    | undefined;
+  return record ? toWorkspaceRuntime(record) : null;
 }
 
 export function getWorkspaceRuntimeByVerifyToken(verifyToken: string): WorkspaceRuntime | null {

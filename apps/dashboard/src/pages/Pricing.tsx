@@ -48,6 +48,7 @@ const TIERS: Tier[] = [
       'Multi-destination fan-out',
       'Webhook relay (any URL)',
       'Email forwarding',
+      'AI auto-reply (powered by Claude)',
       'Slack relay (coming soon)',
       'Message history (1 year)',
     ],
@@ -61,6 +62,7 @@ const TIERS: Tier[] = [
     tagline: 'Multi-number & agencies.',
     features: [
       'Unlimited rules',
+      'AI auto-reply (powered by Claude)',
       'Time-based routing (coming soon)',
       'Analytics & exports (CSV)',
       'Priority support',

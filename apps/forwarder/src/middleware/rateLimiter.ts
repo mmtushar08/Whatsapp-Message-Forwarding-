@@ -14,17 +14,20 @@ export const webhookRateLimiter = rateLimit({
   skip: (req) => req.method === 'GET', // Don't rate limit webhook verification
 });
 
-/**
- * Rate limiter for the config endpoint.
- * Admin-only endpoint — stricter limit.
- * 10 requests per minute per IP.
- */
 export const configRateLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 10,
+  windowMs: 60 * 1000,
+  max: 20,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many config update requests, please try again later.' },
+  message: { error: 'Too many requests, please try again later.' },
+});
+
+export const apiReadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
 });
 
 export const authRateLimiter = rateLimit({

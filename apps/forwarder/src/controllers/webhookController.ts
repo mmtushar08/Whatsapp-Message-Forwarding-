@@ -6,11 +6,14 @@ import {
   getWorkspaceRuntimeByVerifyToken,
   WorkspaceRuntime,
 } from '../db/workspaceStore';
+import { getRulesForWorkspace } from '../db/rulesStore';
 import { logMessage } from '../db/messageStore';
+import { appendMessage, clearHistory, getHistory } from '../db/conversationStore';
 import { getForwardToNumber, isForwardingEnabled } from './configController';
 import { passesFilter, passesFilterForKeywords } from '../services/filterService';
 import logger from '../services/loggerService';
-import { forwardToMultiple } from '../services/whatsappService';
+import { forwardToMultiple, sendDirectMessage } from '../services/whatsappService';
+import { generateReply } from '../services/aiService';
 import { sendForwardEmail } from '../services/emailService';
 import { relayToWebhook } from '../services/webhookRelayService';
 import { getLimits } from '../services/planService';
@@ -19,11 +22,41 @@ import { getCurrentMonthUsage, incrementUsage } from '../db/usageStore';
 import { WebhookPayload } from '../types/whatsapp';
 import { extractMessages } from '../utils/messageParser';
 
-function resolveWorkspaceForVerification(token: string | undefined): WorkspaceRuntime | null {
-  if (!token) {
-    return null;
+async function runSideEffects(
+  relayUrl: string,
+  emailTo: string,
+  msg: { from: string; senderName?: string; text: string; type: string },
+  businessLabel: string,
+): Promise<void> {
+  const tasks: Promise<unknown>[] = [];
+  if (relayUrl) {
+    tasks.push(
+      relayToWebhook(relayUrl, {
+        from: msg.from,
+        senderName: msg.senderName,
+        message: msg.text,
+        type: msg.type,
+        receivedAt: new Date().toISOString(),
+        businessLabel,
+      }),
+    );
   }
+  if (emailTo) {
+    tasks.push(
+      sendForwardEmail({
+        to: emailTo,
+        fromNumber: msg.from,
+        senderName: msg.senderName,
+        messageText: msg.text,
+        businessLabel,
+      }).catch((e: Error) => logger.warn(`Email forward failed: ${e.message}`)),
+    );
+  }
+  if (tasks.length) await Promise.allSettled(tasks);
+}
 
+function resolveWorkspaceForVerification(token: string | undefined): WorkspaceRuntime | null {
+  if (!token) return null;
   return getWorkspaceRuntimeByVerifyToken(token);
 }
 
@@ -92,56 +125,104 @@ export async function receiveWebhook(req: Request, res: Response): Promise<void>
       `Received message from ${senderLabel} | Type: ${message.type} | Text: "${message.text}"`,
     );
 
-    const passes = workspace
-      ? passesFilterForKeywords(message.text, workspace.keywordFilters)
-      : passesFilter(message.text);
+    try {
+      // ── Legacy (no-workspace) path ────────────────────────────────────────
+      if (!workspace) {
+        if (!passesFilter(message.text)) {
+          logger.info(`Message did not pass keyword filter - skipping.`);
+          continue;
+        }
+        if (!isForwardingEnabled()) {
+          logger.info(`Forwarding is disabled - skipping message from ${senderLabel}`);
+          continue;
+        }
+        const legacyRecipients =
+          config.forwardToNumbers.length > 0
+            ? config.forwardToNumbers
+            : [getForwardToNumber() || config.forwardToNumber];
+        const legacyResults = await forwardToMultiple(message.from, message.text, legacyRecipients);
+        legacyResults.forEach(({ to, success, error }) => {
+          logger.info(
+            success
+              ? `Forwarded to ${maskPhoneNumber(to)}`
+              : `Failed to forward to ${maskPhoneNumber(to)}: ${error}`,
+          );
+          logMessage({
+            workspace_id: undefined,
+            from_number: message.from,
+            to_number: to,
+            message: message.text,
+            type: message.type,
+            status: success ? 'success' : 'failed',
+            error,
+          });
+        });
+        continue;
+      }
 
-    if (!passes) {
-      logger.info(
-        `Message from ${senderLabel} did not pass keyword filter - skipping. Text: "${message.text}"`,
-      );
-      continue;
-    }
+      // ── Workspace path ────────────────────────────────────────────────────
+      const creds = { accessToken: workspace.accessToken, phoneNumberId: workspace.phoneNumberId };
 
-    const forwardingEnabled = workspace ? workspace.forwardingEnabled : isForwardingEnabled();
-    if (!forwardingEnabled) {
-      logger.info(`Forwarding is disabled - skipping message from ${senderLabel}`);
-      continue;
-    }
+      // Additional rules are evaluated independently of the workspace-level keyword
+      // filter so that each rule can match a different class of messages.
+      for (const rule of getRulesForWorkspace(workspace.id)) {
+        if (!rule.forwardingEnabled) continue;
+        if (!passesFilterForKeywords(message.text, rule.keywordFilters)) continue;
+        if (rule.allowedSenders.length > 0 && !rule.allowedSenders.includes(message.from)) continue;
 
-    // Free-tier monthly cap enforcement
-    if (workspace) {
+        const ruleRecipients = [rule.forwardToNumber, ...rule.extraRecipients].filter(Boolean);
+        const ruleResults = await forwardToMultiple(
+          message.from,
+          message.text,
+          ruleRecipients,
+          creds,
+        ).catch((e: Error) =>
+          ruleRecipients.map((to) => ({ to, success: false, error: e.message })),
+        );
+        ruleResults.forEach(({ to, success, error }) => {
+          logMessage({
+            workspace_id: workspace.id,
+            from_number: message.from,
+            to_number: to,
+            message: message.text,
+            type: message.type,
+            status: success ? 'success' : 'failed',
+            error,
+          });
+        });
+        await runSideEffects(
+          rule.webhookRelayUrl,
+          rule.emailForwardTo,
+          message,
+          workspace.businessLabel,
+        );
+      }
+
+      // Workspace-level keyword filter gates primary forwarding only
+      if (!passesFilterForKeywords(message.text, workspace.keywordFilters)) {
+        logger.info(`Message did not pass workspace keyword filter - skipping primary forward.`);
+        continue;
+      }
+      if (!workspace.forwardingEnabled) {
+        logger.info(`Workspace forwarding disabled - skipping message from ${senderLabel}`);
+        continue;
+      }
+
+      // Free-tier monthly cap
       const owner = getUserById(workspace.userId);
       const limits = getLimits(owner?.plan ?? 'free');
       if (limits.monthlyMessages !== -1) {
         const used = getCurrentMonthUsage(workspace.id);
         if (used >= limits.monthlyMessages) {
           logger.warn(
-            `Workspace ${workspace.id} (plan: ${owner?.plan ?? 'free'}) exceeded monthly cap of ${limits.monthlyMessages}. Skipping message.`,
+            `Workspace ${workspace.id} exceeded monthly cap of ${limits.monthlyMessages}. Skipping.`,
           );
           continue;
         }
       }
-    }
 
-    try {
-      const recipients = workspace
-        ? [workspace.forwardToNumber, ...workspace.extraRecipients].filter(Boolean)
-        : config.forwardToNumbers.length > 0
-          ? config.forwardToNumbers
-          : [getForwardToNumber() || config.forwardToNumber];
-
-      const results = await forwardToMultiple(
-        message.from,
-        message.text,
-        recipients,
-        workspace
-          ? {
-              accessToken: workspace.accessToken,
-              phoneNumberId: workspace.phoneNumberId,
-            }
-          : undefined,
-      );
+      const recipients = [workspace.forwardToNumber, ...workspace.extraRecipients].filter(Boolean);
+      const results = await forwardToMultiple(message.from, message.text, recipients, creds);
 
       results.forEach(({ to, success, error }) => {
         if (success) {
@@ -149,9 +230,8 @@ export async function receiveWebhook(req: Request, res: Response): Promise<void>
         } else {
           logger.error(`Failed to forward to ${maskPhoneNumber(to)}: ${error}`);
         }
-
         logMessage({
-          workspace_id: workspace?.id,
+          workspace_id: workspace.id,
           from_number: message.from,
           to_number: to,
           message: message.text,
@@ -161,47 +241,43 @@ export async function receiveWebhook(req: Request, res: Response): Promise<void>
         });
       });
 
-      // Count one usage event per inbound message (not per recipient) — simpler mental model for users.
-      if (workspace && results.some((r) => r.success)) {
-        incrementUsage(workspace.id);
-      }
+      if (results.some((r) => r.success)) incrementUsage(workspace.id);
 
-      if (workspace) {
-        const sideEffects: Promise<unknown>[] = [];
+      await runSideEffects(
+        workspace.webhookRelayUrl,
+        workspace.emailForwardTo,
+        message,
+        workspace.businessLabel,
+      );
 
-        if (workspace.webhookRelayUrl) {
-          sideEffects.push(
-            relayToWebhook(workspace.webhookRelayUrl, {
-              from: message.from,
-              senderName: message.senderName,
-              message: message.text,
-              type: message.type,
-              receivedAt: new Date().toISOString(),
-              businessLabel: workspace.businessLabel,
-            }),
+      if (workspace.autoReplyEnabled) {
+        if (message.text.trim().toLowerCase() === 'human') {
+          clearHistory(workspace.id, message.from);
+          await sendDirectMessage(
+            message.from,
+            '✋ Connecting you to a live agent. Please wait.',
+            creds,
+          ).catch((e: Error) => logger.warn(`Handoff message failed: ${e.message}`));
+          logger.info(`Chatbot handoff triggered by ${maskPhoneNumber(message.from)}`);
+        } else {
+          const history = getHistory(workspace.id, message.from);
+          appendMessage(workspace.id, message.from, 'user', message.text);
+          const reply = await generateReply(workspace.autoReplyPrompt, history, message.text).catch(
+            () => null,
           );
-        }
-
-        if (workspace.emailForwardTo) {
-          sideEffects.push(
-            sendForwardEmail({
-              to: workspace.emailForwardTo,
-              fromNumber: message.from,
-              senderName: message.senderName,
-              messageText: message.text,
-              businessLabel: workspace.businessLabel,
-            }).catch((err: Error) =>
-              logger.warn(`Email forward to ${workspace.emailForwardTo} failed: ${err.message}`),
-            ),
-          );
-        }
-
-        if (sideEffects.length > 0) {
-          await Promise.allSettled(sideEffects);
+          if (reply) {
+            appendMessage(workspace.id, message.from, 'assistant', reply);
+            await sendDirectMessage(message.from, reply, creds).catch((e: Error) =>
+              logger.warn(`Chatbot reply send failed: ${e.message}`),
+            );
+            logger.info(
+              `Chatbot replied to ${maskPhoneNumber(message.from)} (${history.length + 1} turns)`,
+            );
+          }
         }
       }
     } catch (error) {
-      logger.error(`Failed to forward message from ${senderLabel}: ${(error as Error).message}`);
+      logger.error(`Failed to process message from ${senderLabel}: ${(error as Error).message}`);
     }
   }
 }
