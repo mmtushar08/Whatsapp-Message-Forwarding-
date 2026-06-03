@@ -6,6 +6,7 @@ export interface PlanLimits {
   maxAdditionalRules: number;
   webhookRelay: boolean;
   emailForward: boolean;
+  aiAutoReply: boolean;
   priceUsd: number;
   label: string;
 }
@@ -17,6 +18,7 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
     maxAdditionalRules: 0,
     webhookRelay: false,
     emailForward: false,
+    aiAutoReply: false,
     priceUsd: 0,
     label: 'Free',
   },
@@ -26,6 +28,7 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
     maxAdditionalRules: 0,
     webhookRelay: false,
     emailForward: true,
+    aiAutoReply: false,
     priceUsd: 9,
     label: 'Starter',
   },
@@ -35,6 +38,7 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
     maxAdditionalRules: 4,
     webhookRelay: true,
     emailForward: true,
+    aiAutoReply: true,
     priceUsd: 19,
     label: 'Pro',
   },
@@ -44,6 +48,7 @@ export const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
     maxAdditionalRules: -1,
     webhookRelay: true,
     emailForward: true,
+    aiAutoReply: true,
     priceUsd: 39,
     label: 'Business',
   },
@@ -57,10 +62,11 @@ export interface FeatureCheckInput {
   extraRecipients: string[];
   webhookRelayUrl: string;
   emailForwardTo: string;
+  autoReplyEnabled?: boolean;
 }
 
 export interface FeatureCheckError {
-  field: 'extraRecipients' | 'webhookRelayUrl' | 'emailForwardTo';
+  field: 'extraRecipients' | 'webhookRelayUrl' | 'emailForwardTo' | 'autoReplyEnabled';
   message: string;
   requiredPlan: PlanTier;
 }
@@ -93,6 +99,14 @@ export function validatePlanFeatures(
       field: 'emailForwardTo',
       message: 'Email forwarding is a Starter feature. Upgrade to use it.',
       requiredPlan: 'starter',
+    };
+  }
+
+  if (input.autoReplyEnabled && !limits.aiAutoReply) {
+    return {
+      field: 'autoReplyEnabled',
+      message: 'AI auto-reply is a Pro feature. Upgrade to use it.',
+      requiredPlan: 'pro',
     };
   }
 

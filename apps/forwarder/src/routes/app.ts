@@ -1,5 +1,9 @@
 import { Router } from 'express';
-import { getWorkspaceMessages, getWorkspaceStats, resendMessage } from '../controllers/appMessagesController';
+import {
+  getWorkspaceMessages,
+  getWorkspaceStats,
+  resendMessage,
+} from '../controllers/appMessagesController';
 import { getWorkspace, saveWorkspace, testWorkspace } from '../controllers/workspaceController';
 import {
   listRules,

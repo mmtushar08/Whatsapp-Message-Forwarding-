@@ -42,7 +42,10 @@ export interface ForwardingRuleInput {
 }
 
 function csv(s: string): string[] {
-  return s.split(',').map((v) => v.trim()).filter(Boolean);
+  return s
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);
 }
 
 function toView(record: ForwardingRuleRecord): ForwardingRuleView {

@@ -28,7 +28,9 @@ export function verifyWebhookSignature(req: Request, res: Response, next: NextFu
   }
 
   if (!req.rawBody) {
-    logger.error('rawBody not available for signature verification — ensure express.json verify callback is configured');
+    logger.error(
+      'rawBody not available for signature verification — ensure express.json verify callback is configured',
+    );
     res.status(500).json({ error: 'Signature verification unavailable' });
     return;
   }

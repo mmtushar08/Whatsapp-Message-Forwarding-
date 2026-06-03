@@ -104,11 +104,15 @@ export async function sendDirectMessage(
     'Content-Type': 'application/json',
   };
   await withRetry(() =>
-    axios.post<SendMessageResponse>(url, {
-      messaging_product: 'whatsapp',
-      to,
-      type: 'text',
-      text: { body: text },
-    }, { headers }),
+    axios.post<SendMessageResponse>(
+      url,
+      {
+        messaging_product: 'whatsapp',
+        to,
+        type: 'text',
+        text: { body: text },
+      },
+      { headers },
+    ),
   );
 }

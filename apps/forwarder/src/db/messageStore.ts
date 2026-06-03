@@ -68,25 +68,42 @@ export function getWorkspaceMessageLogs(
   const conditions: string[] = ['workspace_id = ?'];
   const params: unknown[] = [workspaceId];
 
-  if (filter.status) { conditions.push('status = ?'); params.push(filter.status); }
-  if (filter.from) { conditions.push('from_number LIKE ?'); params.push(`%${filter.from}%`); }
+  if (filter.status) {
+    conditions.push('status = ?');
+    params.push(filter.status);
+  }
+  if (filter.from) {
+    conditions.push('from_number LIKE ?');
+    params.push(`%${filter.from}%`);
+  }
   if (filter.search) {
     conditions.push('(message LIKE ? OR from_number LIKE ? OR to_number LIKE ?)');
     params.push(`%${filter.search}%`, `%${filter.search}%`, `%${filter.search}%`);
   }
   params.push(limit, offset);
   return db
-    .prepare(`SELECT * FROM message_logs WHERE ${conditions.join(' AND ')} ORDER BY id DESC LIMIT ? OFFSET ?`)
+    .prepare(
+      `SELECT * FROM message_logs WHERE ${conditions.join(' AND ')} ORDER BY id DESC LIMIT ? OFFSET ?`,
+    )
     .all(...params) as MessageLog[];
 }
 
-export function getWorkspaceMessageLogCount(workspaceId: string, filter: MessageFilter = {}): number {
+export function getWorkspaceMessageLogCount(
+  workspaceId: string,
+  filter: MessageFilter = {},
+): number {
   const db = getDatabase();
   const conditions: string[] = ['workspace_id = ?'];
   const params: unknown[] = [workspaceId];
 
-  if (filter.status) { conditions.push('status = ?'); params.push(filter.status); }
-  if (filter.from) { conditions.push('from_number LIKE ?'); params.push(`%${filter.from}%`); }
+  if (filter.status) {
+    conditions.push('status = ?');
+    params.push(filter.status);
+  }
+  if (filter.from) {
+    conditions.push('from_number LIKE ?');
+    params.push(`%${filter.from}%`);
+  }
   if (filter.search) {
     conditions.push('(message LIKE ? OR from_number LIKE ? OR to_number LIKE ?)');
     params.push(`%${filter.search}%`, `%${filter.search}%`, `%${filter.search}%`);

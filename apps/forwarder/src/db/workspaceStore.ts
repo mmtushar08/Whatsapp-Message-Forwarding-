@@ -85,7 +85,10 @@ export interface WorkspaceRuntime {
 }
 
 function parseCSV(value: string): string[] {
-  return value.split(',').map((s) => s.trim()).filter(Boolean);
+  return value
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 function toWorkspaceView(record: WorkspaceRecord): WorkspaceView {
@@ -136,17 +139,17 @@ function toWorkspaceRuntime(record: WorkspaceRecord): WorkspaceRuntime {
 
 export function getWorkspaceByUserId(userId: string): WorkspaceView | null {
   const db = getDatabase();
-  const record = db
-    .prepare('SELECT * FROM workspaces WHERE user_id = ?')
-    .get(userId) as WorkspaceRecord | undefined;
+  const record = db.prepare('SELECT * FROM workspaces WHERE user_id = ?').get(userId) as
+    | WorkspaceRecord
+    | undefined;
   return record ? toWorkspaceView(record) : null;
 }
 
 export function upsertWorkspace(userId: string, input: WorkspaceInput): WorkspaceView {
   const db = getDatabase();
-  const existing = db
-    .prepare('SELECT * FROM workspaces WHERE user_id = ?')
-    .get(userId) as WorkspaceRecord | undefined;
+  const existing = db.prepare('SELECT * FROM workspaces WHERE user_id = ?').get(userId) as
+    | WorkspaceRecord
+    | undefined;
   const timestamp = new Date().toISOString();
   const workspaceId = existing?.id ?? createId('workspace');
   const verifyToken = existing?.webhook_verify_token ?? createId('verify');
@@ -164,7 +167,7 @@ export function upsertWorkspace(userId: string, input: WorkspaceInput): Workspac
   const encryptedAppSecret =
     input.appSecret && input.appSecret.trim().length > 0
       ? encryptSecret(input.appSecret.trim())
-      : existing?.app_secret_encrypted ?? null;
+      : (existing?.app_secret_encrypted ?? null);
 
   if (!encryptedAccessToken || !accessTokenPreview) {
     throw new Error('Access token is required when creating a workspace.');
@@ -225,9 +228,9 @@ export function upsertWorkspace(userId: string, input: WorkspaceInput): Workspac
 
 export function getWorkspaceRuntimeByUserId(userId: string): WorkspaceRuntime | null {
   const db = getDatabase();
-  const record = db
-    .prepare('SELECT * FROM workspaces WHERE user_id = ?')
-    .get(userId) as WorkspaceRecord | undefined;
+  const record = db.prepare('SELECT * FROM workspaces WHERE user_id = ?').get(userId) as
+    | WorkspaceRecord
+    | undefined;
   return record ? toWorkspaceRuntime(record) : null;
 }
 

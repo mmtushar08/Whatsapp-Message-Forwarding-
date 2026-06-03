@@ -119,9 +119,7 @@ describe('auth and workspace flow', () => {
     expect(saveRes.body.workspace.businessLabel).toBe('Acme Inbox');
     expect(saveRes.body.workspace.keywordFilters).toEqual(['urgent', 'vip']);
 
-    const meRes = await request(app)
-      .get('/auth/me')
-      .set('authorization', `Bearer ${token}`);
+    const meRes = await request(app).get('/auth/me').set('authorization', `Bearer ${token}`);
 
     expect(meRes.status).toBe(200);
     expect(meRes.body.workspace.forwardToNumber).toBe('15559876543');
@@ -222,36 +220,38 @@ describe('auth and workspace flow', () => {
 
     const workspaceId = saveRes.body.workspace.id as string;
 
-    const res = await request(app).post('/webhook').send({
-      object: 'whatsapp_business_account',
-      entry: [
-        {
-          id: 'entry_1',
-          changes: [
-            {
-              field: 'messages',
-              value: {
-                messaging_product: 'whatsapp',
-                metadata: {
-                  display_phone_number: '15551234567',
-                  phone_number_id: 'workspace_phone_id',
-                },
-                contacts: [{ profile: { name: 'Alice' }, wa_id: '15550001111' }],
-                messages: [
-                  {
-                    from: '15550001111',
-                    id: 'wamid.incoming',
-                    timestamp: '1710400000',
-                    type: 'text',
-                    text: { body: 'Need urgent help' },
+    const res = await request(app)
+      .post('/webhook')
+      .send({
+        object: 'whatsapp_business_account',
+        entry: [
+          {
+            id: 'entry_1',
+            changes: [
+              {
+                field: 'messages',
+                value: {
+                  messaging_product: 'whatsapp',
+                  metadata: {
+                    display_phone_number: '15551234567',
+                    phone_number_id: 'workspace_phone_id',
                   },
-                ],
+                  contacts: [{ profile: { name: 'Alice' }, wa_id: '15550001111' }],
+                  messages: [
+                    {
+                      from: '15550001111',
+                      id: 'wamid.incoming',
+                      timestamp: '1710400000',
+                      type: 'text',
+                      text: { body: 'Need urgent help' },
+                    },
+                  ],
+                },
               },
-            },
-          ],
-        },
-      ],
-    });
+            ],
+          },
+        ],
+      });
 
     expect(res.status).toBe(200);
 

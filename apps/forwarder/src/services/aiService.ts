@@ -2,7 +2,8 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { ConversationMessage } from '../db/conversationStore';
 import logger from './loggerService';
 
-const DEFAULT_SYSTEM = 'You are a helpful WhatsApp assistant. Reply concisely and conversationally.';
+const DEFAULT_SYSTEM =
+  'You are a helpful WhatsApp assistant. Reply concisely and conversationally.';
 
 let client: Anthropic | null = null;
 

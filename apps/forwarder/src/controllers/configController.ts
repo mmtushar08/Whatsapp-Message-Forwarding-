@@ -55,9 +55,7 @@ function normalizeKeywordFilters(keywordFilters: unknown): string[] {
       ? keywordFilters.split(',')
       : [];
 
-  return rawValues
-    .map((value) => String(value).trim().toLowerCase())
-    .filter(Boolean);
+  return rawValues.map((value) => String(value).trim().toLowerCase()).filter(Boolean);
 }
 
 function applySettingsUpdate(input: {

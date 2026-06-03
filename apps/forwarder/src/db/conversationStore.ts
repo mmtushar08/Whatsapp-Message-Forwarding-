@@ -48,7 +48,5 @@ export function clearHistory(workspaceId: string, fromNumber: string): void {
 
 export function pruneExpiredThreads(): void {
   const cutoff = new Date(Date.now() - THREAD_TTL_MS).toISOString();
-  getDatabase()
-    .prepare(`DELETE FROM conversations WHERE created_at < ?`)
-    .run(cutoff);
+  getDatabase().prepare(`DELETE FROM conversations WHERE created_at < ?`).run(cutoff);
 }

@@ -1,17 +1,17 @@
-import { useEffect, useState } from 'react';
-import { resendMessageRequest } from '../api/client';
-import { useProduct } from '../context/ProductContext';
-import type { PrototypeMessageLog } from '../types';
+import { useEffect, useState } from "react";
+import { fetchWorkspaceMessages, resendMessageRequest } from "../api/client";
+import { useProduct } from "../context/ProductContext";
+import type { PrototypeMessageLog } from "../types";
 
-type StatusFilter = 'all' | 'success' | 'failed';
+type StatusFilter = "all" | "success" | "failed";
 
 export default function Messages() {
   const { workspace } = useProduct();
   const [messages, setMessages] = useState<PrototypeMessageLog[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [page, setPage] = useState(0);
   const [retrying, setRetrying] = useState<string | number | null>(null);
   const limit = 20;
@@ -19,22 +19,21 @@ export default function Messages() {
   async function load(s: string, status: StatusFilter, p: number) {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ limit: String(limit), offset: String(p * limit) });
-      if (s) params.set('search', s);
-      if (status !== 'all') params.set('status', status);
-      const res = await fetch(
-        `${(import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:3000'}/app/messages?${params}`,
-        { headers: { Authorization: `Bearer ${localStorage.getItem('session_token')}` } }
+      const { data, pagination } = await fetchWorkspaceMessages(
+        limit,
+        p * limit,
+        { search: s, status },
       );
-      const data = await res.json() as { data: PrototypeMessageLog[]; pagination: { total: number } };
-      setMessages(data.data ?? []);
-      setTotal(data.pagination?.total ?? 0);
+      setMessages(data);
+      setTotal(pagination.total);
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => { void load(search, statusFilter, page); }, []);
+  useEffect(() => {
+    void load(search, statusFilter, page);
+  }, []);
 
   function applySearch(value: string) {
     setSearch(value);
@@ -70,7 +69,9 @@ export default function Messages() {
   if (!workspace) {
     return (
       <div className="rounded-[2rem] border border-stone-200 bg-white p-8 text-center shadow-sm">
-        <p className="text-sm text-stone-600">Connect your WhatsApp number first to see message logs.</p>
+        <p className="text-sm text-stone-600">
+          Connect your WhatsApp number first to see message logs.
+        </p>
       </div>
     );
   }
@@ -78,9 +79,15 @@ export default function Messages() {
   return (
     <div className="space-y-6">
       <div>
-        <p className="font-mono text-xs uppercase tracking-[0.25em] text-emerald-700">Logs</p>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight text-stone-900">Forwarding activity</h1>
-        <p className="mt-2 text-sm text-stone-600">{total} total messages logged</p>
+        <p className="font-mono text-xs uppercase tracking-[0.25em] text-emerald-700">
+          Logs
+        </p>
+        <h1 className="mt-2 text-3xl font-bold tracking-tight text-stone-900">
+          Forwarding activity
+        </h1>
+        <p className="mt-2 text-sm text-stone-600">
+          {total} total messages logged
+        </p>
       </div>
 
       {/* Search + filter bar */}
@@ -89,18 +96,20 @@ export default function Messages() {
           type="search"
           placeholder="Search by message, number..."
           value={search}
-          onChange={e => applySearch(e.target.value)}
+          onChange={(e) => applySearch(e.target.value)}
           className="w-full rounded-2xl border border-stone-300 px-4 py-3 text-sm outline-none focus:border-emerald-600 sm:max-w-xs"
         />
         <div className="flex gap-2">
-          {(['all', 'success', 'failed'] as StatusFilter[]).map(s => (
+          {(["all", "success", "failed"] as StatusFilter[]).map((s) => (
             <button
               key={s}
               onClick={() => applyStatus(s)}
               className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
                 statusFilter === s
-                  ? s === 'failed' ? 'bg-rose-600 text-white' : 'bg-emerald-700 text-white'
-                  : 'border border-stone-300 text-stone-700 hover:border-stone-400'
+                  ? s === "failed"
+                    ? "bg-rose-600 text-white"
+                    : "bg-emerald-700 text-white"
+                  : "border border-stone-300 text-stone-700 hover:border-stone-400"
               }`}
             >
               {s.charAt(0).toUpperCase() + s.slice(1)}
@@ -116,10 +125,18 @@ export default function Messages() {
       ) : messages.length === 0 ? (
         <div className="rounded-[2rem] border border-stone-200 bg-white p-10 text-center shadow-sm">
           <p className="text-sm text-stone-600">
-            {search || statusFilter !== 'all' ? 'No messages match your filters.' : 'No messages logged yet.'}
+            {search || statusFilter !== "all"
+              ? "No messages match your filters."
+              : "No messages logged yet."}
           </p>
-          {(search || statusFilter !== 'all') && (
-            <button onClick={() => { applySearch(''); applyStatus('all'); }} className="mt-3 text-sm font-semibold text-emerald-700 hover:underline">
+          {(search || statusFilter !== "all") && (
+            <button
+              onClick={() => {
+                applySearch("");
+                applyStatus("all");
+              }}
+              className="mt-3 text-sm font-semibold text-emerald-700 hover:underline"
+            >
               Clear filters
             </button>
           )}
@@ -138,11 +155,18 @@ export default function Messages() {
             </thead>
             <tbody className="divide-y divide-stone-100">
               {messages.map((msg) => (
-                <tr key={msg.id} className="text-sm text-stone-700 hover:bg-stone-50">
+                <tr
+                  key={msg.id}
+                  className="text-sm text-stone-700 hover:bg-stone-50"
+                >
                   <td className="px-6 py-4">
-                    <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                      msg.status === 'success' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
-                    }`}>
+                    <span
+                      className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                        msg.status === "success"
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-rose-100 text-rose-700"
+                      }`}
+                    >
                       {msg.status}
                     </span>
                   </td>
@@ -150,17 +174,21 @@ export default function Messages() {
                   <td className="px-6 py-4 font-mono text-xs">+{msg.to}</td>
                   <td className="max-w-xs px-6 py-4">
                     <div className="truncate">{msg.message}</div>
-                    {msg.error && <div className="mt-1 text-xs text-rose-600">{msg.error}</div>}
+                    {msg.error && (
+                      <div className="mt-1 text-xs text-rose-600">
+                        {msg.error}
+                      </div>
+                    )}
                   </td>
                   <td className="whitespace-nowrap px-6 py-4 text-xs text-stone-500">
                     <div>{new Date(msg.forwardedAt).toLocaleString()}</div>
-                    {msg.status === 'failed' && (
+                    {msg.status === "failed" && (
                       <button
                         onClick={() => handleRetry(msg)}
                         disabled={retrying === msg.id}
                         className="mt-1 text-xs font-semibold text-emerald-700 hover:underline disabled:opacity-50"
                       >
-                        {retrying === msg.id ? 'Retrying...' : 'Retry'}
+                        {retrying === msg.id ? "Retrying..." : "Retry"}
                       </button>
                     )}
                   </td>
@@ -178,7 +206,9 @@ export default function Messages() {
               >
                 ← Previous
               </button>
-              <span className="text-sm text-stone-600">Page {page + 1} of {totalPages}</span>
+              <span className="text-sm text-stone-600">
+                Page {page + 1} of {totalPages}
+              </span>
               <button
                 onClick={() => goPage(page + 1)}
                 disabled={page >= totalPages - 1}

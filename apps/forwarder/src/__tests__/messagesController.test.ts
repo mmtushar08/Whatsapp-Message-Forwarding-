@@ -107,9 +107,7 @@ describe('GET /messages/stats', () => {
     insertMessage('111', '222', 'B', 'success');
     insertMessage('111', '222', 'C', 'failed', 'timeout');
 
-    const res = await request(app)
-      .get('/messages/stats')
-      .set('x-admin-token', 'test_admin_token');
+    const res = await request(app).get('/messages/stats').set('x-admin-token', 'test_admin_token');
 
     expect(res.status).toBe(200);
     expect(res.body.total).toBe(3);

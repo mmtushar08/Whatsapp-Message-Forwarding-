@@ -107,20 +107,16 @@ export function initDatabase(): void {
     )
   `);
 
-  const ruleColumns = db.prepare(`PRAGMA table_info(forwarding_rules)`).all() as Array<{ name: string }>;
-  if (!ruleColumns.some((c) => c.name === 'allowed_senders')) {
-    db.exec(`ALTER TABLE forwarding_rules ADD COLUMN allowed_senders TEXT NOT NULL DEFAULT ''`);
-  }
-
-  const messageLogColumns = db
-    .prepare(`PRAGMA table_info(message_logs)`)
-    .all() as Array<{ name: string }>;
-
+  const messageLogColumns = db.prepare(`PRAGMA table_info(message_logs)`).all() as Array<{
+    name: string;
+  }>;
   if (!messageLogColumns.some((column) => column.name === 'workspace_id')) {
     db.exec(`ALTER TABLE message_logs ADD COLUMN workspace_id TEXT`);
   }
 
-  const workspaceColumns = db.prepare(`PRAGMA table_info(workspaces)`).all() as Array<{ name: string }>;
+  const workspaceColumns = db.prepare(`PRAGMA table_info(workspaces)`).all() as Array<{
+    name: string;
+  }>;
   if (!workspaceColumns.some((c) => c.name === 'app_secret_encrypted')) {
     db.exec(`ALTER TABLE workspaces ADD COLUMN app_secret_encrypted TEXT`);
   }
@@ -150,8 +146,11 @@ export function initDatabase(): void {
       created_at   TEXT NOT NULL
     )
   `);
-  db.exec(`CREATE INDEX IF NOT EXISTS idx_conversations_thread ON conversations(workspace_id, from_number, created_at)`);
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_conversations_thread ON conversations(workspace_id, from_number, created_at)`,
+  );
 
+  // forwarding_rules must be created BEFORE the allowed_senders migration check below
   db.exec(`
     CREATE TABLE IF NOT EXISTS forwarding_rules (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -168,6 +167,13 @@ export function initDatabase(): void {
       FOREIGN KEY(workspace_id) REFERENCES workspaces(id)
     )
   `);
+
+  const ruleColumns = db.prepare(`PRAGMA table_info(forwarding_rules)`).all() as Array<{
+    name: string;
+  }>;
+  if (!ruleColumns.some((c) => c.name === 'allowed_senders')) {
+    db.exec(`ALTER TABLE forwarding_rules ADD COLUMN allowed_senders TEXT NOT NULL DEFAULT ''`);
+  }
 
   const userColumns = db.prepare(`PRAGMA table_info(users)`).all() as Array<{ name: string }>;
   if (!userColumns.some((c) => c.name === 'plan')) {

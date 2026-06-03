@@ -1,4 +1,8 @@
-import { clearSessionToken, getSessionToken, setSessionToken } from '../lib/session';
+import {
+  clearSessionToken,
+  getSessionToken,
+  setSessionToken,
+} from "../lib/session";
 import type {
   BillingStatus,
   ForwardingRule,
@@ -9,9 +13,11 @@ import type {
   PrototypeMessageLog,
   WorkspaceSettingsInput,
   WorkspaceSetup,
-} from '../types';
+} from "../types";
 
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:3000';
+const BASE_URL =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined) ??
+  "http://localhost:3000";
 
 interface AuthPayload {
   user: MarketplaceUser;
@@ -26,7 +32,7 @@ function normalizeMessages(
     from_number: string;
     to_number: string;
     message: string;
-    status: 'success' | 'failed';
+    status: "success" | "failed";
     forwarded_at: string;
     error?: string | null;
   }>,
@@ -43,23 +49,31 @@ function normalizeMessages(
   }));
 }
 
-async function request<T>(path: string, options: RequestInit = {}, auth = false): Promise<T> {
+async function request<T>(
+  path: string,
+  options: RequestInit = {},
+  auth = false,
+): Promise<T> {
   const headers = new Headers(options.headers || {});
-  headers.set('Content-Type', 'application/json');
+  headers.set("Content-Type", "application/json");
 
   if (auth) {
     const token = getSessionToken();
     if (!token) {
-      throw new Error('Missing session token. Please log in again.');
+      throw new Error("Missing session token. Please log in again.");
     }
-    headers.set('Authorization', `Bearer ${token}`);
+    headers.set("Authorization", `Bearer ${token}`);
   }
 
   const response = await fetch(`${BASE_URL}${path}`, { ...options, headers });
-  const payload = (await response.json().catch(() => ({}))) as { error?: string };
+  const payload = (await response.json().catch(() => ({}))) as {
+    error?: string;
+  };
 
   if (!response.ok) {
-    throw new Error(payload.error ?? `Request failed with status ${response.status}`);
+    throw new Error(
+      payload.error ?? `Request failed with status ${response.status}`,
+    );
   }
 
   return payload as T;
@@ -74,8 +88,8 @@ export async function signupAccount(
   email: string,
   password: string,
 ): Promise<{ user: MarketplaceUser; workspace: WorkspaceSetup | null }> {
-  const payload = await request<AuthPayload>('/auth/signup', {
-    method: 'POST',
+  const payload = await request<AuthPayload>("/auth/signup", {
+    method: "POST",
     body: JSON.stringify({ name, email, password }),
   });
 
@@ -90,8 +104,8 @@ export async function loginAccount(
   email: string,
   password: string,
 ): Promise<{ user: MarketplaceUser; workspace: WorkspaceSetup | null }> {
-  const payload = await request<AuthPayload>('/auth/login', {
-    method: 'POST',
+  const payload = await request<AuthPayload>("/auth/login", {
+    method: "POST",
     body: JSON.stringify({ email, password }),
   });
 
@@ -111,11 +125,10 @@ export async function getCurrentSession(): Promise<{
   }
 
   try {
-    const payload = await request<{ user: MarketplaceUser; workspace: WorkspaceSetup | null }>(
-      '/auth/me',
-      { method: 'GET' },
-      true,
-    );
+    const payload = await request<{
+      user: MarketplaceUser;
+      workspace: WorkspaceSetup | null;
+    }>("/auth/me", { method: "GET" }, true);
 
     return {
       user: normalizeUser(payload.user),
@@ -133,7 +146,11 @@ export async function logoutAccount(): Promise<void> {
   }
 
   try {
-    await request<{ success: boolean }>('/auth/logout', { method: 'POST' }, true);
+    await request<{ success: boolean }>(
+      "/auth/logout",
+      { method: "POST" },
+      true,
+    );
   } finally {
     clearSessionToken();
   }
@@ -143,9 +160,9 @@ export async function saveWorkspaceRequest(
   input: WorkspaceSettingsInput,
 ): Promise<{ workspace: WorkspaceSetup }> {
   const payload = await request<{ workspace: WorkspaceSetup }>(
-    '/app/workspace',
+    "/app/workspace",
     {
-      method: 'PATCH',
+      method: "PATCH",
       body: JSON.stringify({
         businessLabel: input.businessLabel,
         sourcePhoneNumber: input.sourcePhoneNumber,
@@ -173,7 +190,16 @@ export async function saveWorkspaceRequest(
 export async function fetchWorkspaceMessages(
   limit = 20,
   offset = 0,
+  filters: { search?: string; status?: string } = {},
 ): Promise<{ data: PrototypeMessageLog[]; pagination: Pagination }> {
+  const params = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset),
+  });
+  if (filters.search) params.set("search", filters.search);
+  if (filters.status && filters.status !== "all")
+    params.set("status", filters.status);
+
   const payload = await request<{
     data: Array<{
       id: number;
@@ -181,12 +207,12 @@ export async function fetchWorkspaceMessages(
       from_number: string;
       to_number: string;
       message: string;
-      status: 'success' | 'failed';
+      status: "success" | "failed";
       forwarded_at: string;
       error?: string | null;
     }>;
     pagination: Pagination;
-  }>(`/app/messages?limit=${limit}&offset=${offset}`, { method: 'GET' }, true);
+  }>(`/app/messages?${params}`, { method: "GET" }, true);
 
   return {
     data: normalizeMessages(payload.data),
@@ -195,57 +221,81 @@ export async function fetchWorkspaceMessages(
 }
 
 export async function fetchWorkspaceStats(): Promise<MessageStats> {
-  return request<MessageStats>('/app/messages/stats', { method: 'GET' }, true);
+  return request<MessageStats>("/app/messages/stats", { method: "GET" }, true);
 }
 
 export async function fetchSmtpStatus(): Promise<{ smtpConfigured: boolean }> {
   try {
-    return await request<{ smtpConfigured: boolean }>('/health/smtp', { method: 'GET' });
+    return await request<{ smtpConfigured: boolean }>("/health/smtp", {
+      method: "GET",
+    });
   } catch {
     return { smtpConfigured: false };
   }
 }
 
 export async function fetchBillingStatus(): Promise<BillingStatus> {
-  return request<BillingStatus>('/billing/status', { method: 'GET' }, true);
+  return request<BillingStatus>("/billing/status", { method: "GET" }, true);
 }
 
-export async function startSubscription(plan: 'starter' | 'pro' | 'business'): Promise<{
+export async function startSubscription(
+  plan: "starter" | "pro" | "business",
+): Promise<{
   subscriptionId: string;
   shortUrl: string;
   status: string;
 }> {
   return request<{ subscriptionId: string; shortUrl: string; status: string }>(
-    '/billing/subscribe',
-    { method: 'POST', body: JSON.stringify({ plan }) },
+    "/billing/subscribe",
+    { method: "POST", body: JSON.stringify({ plan }) },
     true,
   );
 }
 
 export async function cancelSubscription(): Promise<{ success: boolean }> {
-  return request<{ success: boolean }>('/billing/cancel', { method: 'POST' }, true);
+  return request<{ success: boolean }>(
+    "/billing/cancel",
+    { method: "POST" },
+    true,
+  );
 }
 
 export async function testWorkspaceConnection(): Promise<{ success: boolean }> {
-  return request<{ success: boolean }>('/app/workspace/test', { method: 'POST' }, true);
+  return request<{ success: boolean }>(
+    "/app/workspace/test",
+    { method: "POST" },
+    true,
+  );
 }
 
 export async function fetchRules(): Promise<ForwardingRule[]> {
-  const payload = await request<{ rules: ForwardingRule[] }>('/app/rules', { method: 'GET' }, true);
+  const payload = await request<{ rules: ForwardingRule[] }>(
+    "/app/rules",
+    { method: "GET" },
+    true,
+  );
   return payload.rules;
 }
 
-export async function createRule(input: ForwardingRuleInput): Promise<ForwardingRule> {
+export async function createRule(
+  input: ForwardingRuleInput,
+): Promise<ForwardingRule> {
   const payload = await request<{ rule: ForwardingRule }>(
-    '/app/rules',
+    "/app/rules",
     {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify({
         name: input.name,
         forwardToNumber: input.forwardToNumber,
         extraRecipients: input.extraRecipients,
-        keywordFilters: input.keywordFilters.split(',').map((s) => s.trim()).filter(Boolean),
-        allowedSenders: input.allowedSenders.split(',').map((s) => s.trim()).filter(Boolean),
+        keywordFilters: input.keywordFilters
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+        allowedSenders: input.allowedSenders
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
         forwardingEnabled: input.forwardingEnabled,
         webhookRelayUrl: input.webhookRelayUrl,
         emailForwardTo: input.emailForwardTo,
@@ -256,17 +306,26 @@ export async function createRule(input: ForwardingRuleInput): Promise<Forwarding
   return payload.rule;
 }
 
-export async function updateRule(id: number, input: ForwardingRuleInput): Promise<ForwardingRule> {
+export async function updateRule(
+  id: number,
+  input: ForwardingRuleInput,
+): Promise<ForwardingRule> {
   const payload = await request<{ rule: ForwardingRule }>(
     `/app/rules/${id}`,
     {
-      method: 'PATCH',
+      method: "PATCH",
       body: JSON.stringify({
         name: input.name,
         forwardToNumber: input.forwardToNumber,
         extraRecipients: input.extraRecipients,
-        keywordFilters: input.keywordFilters.split(',').map((s) => s.trim()).filter(Boolean),
-        allowedSenders: input.allowedSenders.split(',').map((s) => s.trim()).filter(Boolean),
+        keywordFilters: input.keywordFilters
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+        allowedSenders: input.allowedSenders
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
         forwardingEnabled: input.forwardingEnabled,
         webhookRelayUrl: input.webhookRelayUrl,
         emailForwardTo: input.emailForwardTo,
@@ -278,9 +337,19 @@ export async function updateRule(id: number, input: ForwardingRuleInput): Promis
 }
 
 export async function deleteRule(id: number): Promise<void> {
-  await request<{ success: boolean }>(`/app/rules/${id}`, { method: 'DELETE' }, true);
+  await request<{ success: boolean }>(
+    `/app/rules/${id}`,
+    { method: "DELETE" },
+    true,
+  );
 }
 
-export async function resendMessageRequest(id: string | number): Promise<{ success: boolean }> {
-  return request<{ success: boolean }>(`/app/messages/${id}/resend`, { method: 'POST' }, true);
+export async function resendMessageRequest(
+  id: string | number,
+): Promise<{ success: boolean }> {
+  return request<{ success: boolean }>(
+    `/app/messages/${id}/resend`,
+    { method: "POST" },
+    true,
+  );
 }
