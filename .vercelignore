@@ -1,0 +1,19 @@
+# Only the dashboard is deployed to Vercel (see vercel.json buildCommand).
+# Build-time env vars (VITE_*) are set in the Vercel project, not here.
+node_modules
+**/node_modules
+**/dist
+**/.env
+apps/forwarder
+packages
+Demo_App
+Whatsapp-Message-Forwarding-
+data
+docs
+tools
+logs
+.github
+.claude
+*.md
+docker-compose.yml
+render.yaml

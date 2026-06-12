@@ -62,6 +62,49 @@ export async function forwardMessageTo(
   }
 }
 
+/**
+ * Sends a plain text message (used by inbox replies — no "Forwarded from" prefix).
+ */
+export async function sendTextMessage(
+  to: string,
+  text: string,
+  runtimeConfig: WhatsappRuntimeConfig,
+): Promise<SendMessageResponse> {
+  const url = `${GRAPH_API_URL}/${runtimeConfig.phoneNumberId}/messages`;
+
+  const payload: SendMessagePayload = {
+    messaging_product: 'whatsapp',
+    to,
+    type: 'text',
+    text: { body: text },
+  };
+
+  const headers = {
+    Authorization: `Bearer ${runtimeConfig.accessToken}`,
+    'Content-Type': 'application/json',
+  };
+
+  try {
+    return await withRetry(
+      async () => {
+        const response = await axios.post<SendMessageResponse>(url, payload, {
+          headers,
+          timeout: config.whatsappTimeoutMs,
+        });
+        logger.info(`Reply sent to ${to}. ID: ${response.data.messages?.[0]?.id ?? 'unknown'}`);
+        return response.data;
+      },
+      config.maxRetryAttempts,
+      config.retryBaseDelayMs,
+    );
+  } catch (error) {
+    const axiosError = error as AxiosError;
+    const errorDetails = axiosError.response?.data ?? axiosError.message;
+    logger.error(`Failed to send reply: ${JSON.stringify(errorDetails)}`);
+    throw new Error(`WhatsApp API error: ${JSON.stringify(errorDetails)}`);
+  }
+}
+
 export async function forwardMessage(
   from: string,
   originalText: string,

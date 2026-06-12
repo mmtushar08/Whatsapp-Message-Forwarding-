@@ -1,520 +1,626 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchSmtpStatus } from '../api/client';
+import { fetchWabaInfo, PhoneOption } from '../api/client';
 import { useProduct } from '../context/ProductContext';
 
-const STEPS = [
-  { number: 1, label: 'Connect WhatsApp' },
-  { number: 2, label: 'Forwarding rule' },
-  { number: 3, label: 'Finish setup' },
-] as const;
+/* ── types ── */
+interface EmbeddedSignupMessage {
+  type?: string;
+  event?: 'FINISH' | 'CANCEL' | 'ERROR';
+  data?: { phone_number_id?: string; waba_id?: string };
+}
+declare global {
+  interface Window {
+    fbAsyncInit?: () => void;
+    FB?: {
+      init: (o: { appId: string; version: string; xfbml?: boolean; cookie?: boolean }) => void;
+      login: (cb: (r: { authResponse?: { accessToken?: string } }) => void, o: object) => void;
+    };
+  }
+}
 
-function StepIndicator({ current }: { current: number }) {
+const META_APP_ID = import.meta.env.VITE_META_APP_ID as string | undefined;
+
+function parseMsg(event: MessageEvent): EmbeddedSignupMessage | null {
+  if (!event.origin.endsWith('facebook.com')) return null;
+  if (typeof event.data === 'string') { try { return JSON.parse(event.data); } catch { return null; } }
+  return event.data as EmbeddedSignupMessage;
+}
+
+/* ── step progress bar ── */
+const STEPS = ['Business', 'WhatsApp', 'First rule', 'Go live'];
+function StepBar({ step }: { step: number }) {
   return (
-    <div className="mb-10 flex items-start justify-center">
-      {STEPS.map((s, i) => (
-        <div key={s.number} className="flex items-start">
-          <div className="flex flex-col items-center gap-2">
+    <div className="flex gap-2 mb-6">
+      {STEPS.map((label, i) => {
+        const done = i < step - 1;
+        const now  = i === step - 1;
+        return (
+          <div key={label} className="flex-1 text-center">
             <div
-              className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold transition-all ${
-                current > s.number
-                  ? 'bg-emerald-700 text-white'
-                  : current === s.number
-                    ? 'bg-emerald-700 text-white ring-4 ring-emerald-100'
-                    : 'bg-stone-200 text-stone-400'
-              }`}
-            >
-              {current > s.number ? '✓' : s.number}
-            </div>
-            <span
-              className={`w-24 text-center text-xs font-medium ${
-                current >= s.number ? 'text-stone-700' : 'text-stone-400'
-              }`}
-            >
-              {s.label}
-            </span>
-          </div>
-          {i < STEPS.length - 1 && (
-            <div
-              className={`mt-[1.1rem] h-px w-16 transition-all ${
-                current > s.number ? 'bg-emerald-700' : 'bg-stone-200'
-              }`}
+              className="h-[5px] rounded-full mb-1.5"
+              style={{
+                background: done || now ? '#1FAB5E' : '#DCE4DF',
+                boxShadow: now ? '0 0 0 3px rgba(31,171,94,.18)' : undefined,
+              }}
             />
-          )}
-        </div>
-      ))}
+            <div
+              className="font-mono text-[10.5px] uppercase tracking-[0.1em]"
+              style={{ color: now ? '#168B4B' : '#5C6B63', fontWeight: now ? 700 : 400 }}
+            >
+              {i + 1} · {label}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-function FieldHint({ children }: { children: string }) {
-  return <span className="mt-1.5 block text-xs text-stone-400">{children}</span>;
-}
+/* ── Meta popup simulation ── */
+function MetaPopup({ onClose, onFinish }: { onClose: () => void; onFinish: () => void }) {
+  const [metaStep, setMetaStep] = useState(1);
 
-function CopyButton({ value, label }: { value: string; label: string }) {
-  const [copied, setCopied] = useState(false);
-  function handleCopy() {
-    navigator.clipboard.writeText(value).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
+  function finish() {
+    setMetaStep(6);
+    setTimeout(() => { onClose(); onFinish(); }, 1400);
   }
+
+  const Foot = ({ back, next, nextLabel = 'Next' }: { back?: () => void; next: () => void; nextLabel?: string }) => (
+    <div className="flex justify-end gap-2.5 pt-4">
+      {back && <button type="button" onClick={back} className="rounded-[9px] px-4 py-2 text-sm font-semibold border" style={{ borderColor: '#dde3e8', color: '#1c2b33' }}>Back</button>}
+      <button type="button" onClick={next} className="rounded-[9px] px-4 py-2 text-sm font-semibold text-white" style={{ background: '#1877F2' }}>{nextLabel}</button>
+    </div>
+  );
+
   return (
-    <button
-      type="button"
-      onClick={handleCopy}
-      className="text-xs font-semibold text-emerald-700 hover:underline"
-    >
-      {copied ? 'Copied!' : `Copy ${label}`}
-    </button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(10,20,16,.55)' }}>
+      <div className="w-full max-w-[480px] bg-white rounded-[12px] overflow-hidden" style={{ boxShadow: '0 24px 70px rgba(0,0,0,.35)' }}>
+        {/* Header */}
+        <div className="px-4 py-3 flex items-center justify-between" style={{ background: '#1877F2' }}>
+          <div className="flex items-center gap-2 text-white font-bold text-sm">
+            <span className="w-6 h-6 rounded-full bg-white grid place-items-center font-black text-[14px]" style={{ color: '#1877F2' }}>f</span>
+            Meta · WhatsApp embedded signup
+          </div>
+          <button type="button" onClick={onClose} className="text-white text-xl leading-none bg-transparent border-none">×</button>
+        </div>
+
+        {/* Step 1 */}
+        {metaStep === 1 && (
+          <div className="p-6">
+            <div className="font-mono text-[11px] text-[#65766e] uppercase tracking-[0.1em] mb-2">STEP 1 OF 5 · FACEBOOK LOGIN</div>
+            <h3 className="text-[18px] font-bold mb-1.5" style={{ color: '#1c2b33' }}>Continue as Tushar?</h3>
+            <p className="text-[13.5px] mb-5" style={{ color: '#65766e' }}>Sendro will receive your name, profile picture and access to manage your WhatsApp Business Account.</p>
+            <div className="border rounded-[10px] p-3.5 flex items-center gap-3" style={{ borderColor: '#dde3e8' }}>
+              <div className="w-9 h-9 rounded-full grid place-items-center font-bold text-xs shrink-0" style={{ background: '#E8A23D', color: '#3E2A05' }}>TM</div>
+              <div><div className="font-bold text-sm">Tushar M.</div><div className="text-xs" style={{ color: '#65766e' }}>Facebook account</div></div>
+            </div>
+            <Foot next={() => setMetaStep(2)} nextLabel="Continue as Tushar" />
+          </div>
+        )}
+
+        {/* Step 2 */}
+        {metaStep === 2 && (
+          <div className="p-6">
+            <div className="font-mono text-[11px] text-[#65766e] uppercase tracking-[0.1em] mb-2">STEP 2 OF 5 · BUSINESS PORTFOLIO</div>
+            <h3 className="text-[18px] font-bold mb-1.5" style={{ color: '#1c2b33' }}>Choose a business portfolio</h3>
+            <p className="text-[13.5px] mb-4" style={{ color: '#65766e' }}>Select the Meta Business Portfolio that owns your WhatsApp account.</p>
+            <div className="flex flex-col gap-2 mb-4">
+              {[
+                { icon: '🏢', name: 'Acme Realty', sub: 'Business ID · 2841…07 · Verified', on: true },
+                { icon: '🏪', name: 'Tushar Side Projects', sub: 'Business ID · 5530…91', on: false },
+                { icon: '＋', name: 'Create a new business portfolio', sub: '', on: false },
+              ].map(item => (
+                <div key={item.name} className="flex items-center gap-3 p-3.5 rounded-[10px] border" style={{ borderColor: item.on ? '#1877F2' : '#dde3e8', background: item.on ? '#F0F6FE' : '#fff' }}>
+                  <div className="w-9 h-9 rounded-[9px] bg-[#E7EDF2] grid place-items-center text-lg shrink-0">{item.icon}</div>
+                  <div><div className="font-bold text-sm">{item.name}</div>{item.sub && <div className="text-xs" style={{ color: '#65766e' }}>{item.sub}</div>}</div>
+                </div>
+              ))}
+            </div>
+            <Foot back={() => setMetaStep(1)} next={() => setMetaStep(3)} />
+          </div>
+        )}
+
+        {/* Step 3 */}
+        {metaStep === 3 && (
+          <div className="p-6">
+            <div className="font-mono text-[11px] text-[#65766e] uppercase tracking-[0.1em] mb-2">STEP 3 OF 5 · WHATSAPP BUSINESS ACCOUNT</div>
+            <h3 className="text-[18px] font-bold mb-1.5" style={{ color: '#1c2b33' }}>Select a WhatsApp Business Account</h3>
+            <p className="text-[13.5px] mb-4" style={{ color: '#65766e' }}>Pick an existing WABA or create a new one under Acme Realty.</p>
+            <div className="flex flex-col gap-2 mb-4">
+              {[
+                { icon: '💬', name: 'acme-realty-waba', sub: 'WABA ID · 1042…88 · 1 phone number', on: true },
+                { icon: '＋', name: 'Create a new WhatsApp Business Account', sub: '', on: false },
+              ].map(item => (
+                <div key={item.name} className="flex items-center gap-3 p-3.5 rounded-[10px] border" style={{ borderColor: item.on ? '#1877F2' : '#dde3e8', background: item.on ? '#F0F6FE' : '#fff' }}>
+                  <div className="w-9 h-9 rounded-[9px] bg-[#E7EDF2] grid place-items-center text-lg shrink-0">{item.icon}</div>
+                  <div><div className="font-bold text-sm">{item.name}</div>{item.sub && <div className="text-xs" style={{ color: '#65766e' }}>{item.sub}</div>}</div>
+                </div>
+              ))}
+            </div>
+            <Foot back={() => setMetaStep(2)} next={() => setMetaStep(4)} />
+          </div>
+        )}
+
+        {/* Step 4 */}
+        {metaStep === 4 && (
+          <div className="p-6">
+            <div className="font-mono text-[11px] text-[#65766e] uppercase tracking-[0.1em] mb-2">STEP 4 OF 5 · PHONE NUMBER</div>
+            <h3 className="text-[18px] font-bold mb-1.5" style={{ color: '#1c2b33' }}>Choose the number to connect</h3>
+            <p className="text-[13.5px] mb-4" style={{ color: '#65766e' }}>This number will send and receive messages through the WhatsApp Cloud API.</p>
+            <div className="flex flex-col gap-2 mb-4">
+              {[
+                { icon: '📱', name: '+91 98765 43210', sub: 'Acme Realty Support · Verified · Quality: High', on: true },
+                { icon: '＋', name: 'Add a new phone number', sub: "You'll verify it by SMS or voice call", on: false },
+              ].map(item => (
+                <div key={item.name} className="flex items-center gap-3 p-3.5 rounded-[10px] border" style={{ borderColor: item.on ? '#1877F2' : '#dde3e8', background: item.on ? '#F0F6FE' : '#fff' }}>
+                  <div className="w-9 h-9 rounded-[9px] bg-[#E7EDF2] grid place-items-center text-lg shrink-0">{item.icon}</div>
+                  <div><div className="font-bold text-sm font-mono">{item.name}</div><div className="text-xs" style={{ color: '#65766e' }}>{item.sub}</div></div>
+                </div>
+              ))}
+            </div>
+            <Foot back={() => setMetaStep(3)} next={() => setMetaStep(5)} />
+          </div>
+        )}
+
+        {/* Step 5 — permissions */}
+        {metaStep === 5 && (
+          <div className="p-6">
+            <div className="font-mono text-[11px] text-[#65766e] uppercase tracking-[0.1em] mb-2">STEP 5 OF 5 · PERMISSIONS</div>
+            <h3 className="text-[18px] font-bold mb-1.5" style={{ color: '#1c2b33' }}>What Sendro is allowed to do</h3>
+            <p className="text-[13.5px] mb-4" style={{ color: '#65766e' }}>You can review or revoke this anytime in Meta Business settings.</p>
+            {[
+              'Receive incoming messages on +91 98765 43210 via webhooks',
+              'Read your WhatsApp Business Account profile & phone numbers',
+              'Send messages on your behalf (for forward-to-number rules)',
+              'Manage message templates',
+            ].map(p => (
+              <div key={p} className="flex gap-2.5 text-[13.5px] mb-2.5" style={{ color: '#3b4a43' }}>
+                <span className="font-black shrink-0" style={{ color: '#1877F2' }}>✓</span>
+                {p}
+              </div>
+            ))}
+            <Foot back={() => setMetaStep(4)} next={finish} nextLabel="Finish & connect" />
+          </div>
+        )}
+
+        {/* Step 6 — success */}
+        {metaStep === 6 && (
+          <div className="p-6 text-center">
+            <div className="w-16 h-16 rounded-full grid place-items-center text-3xl mx-auto mb-4" style={{ background: '#E4F6EC', color: '#168B4B' }}>✓</div>
+            <h3 className="text-[18px] font-bold mb-1.5" style={{ color: '#1c2b33' }}>Connected!</h3>
+            <p className="text-[13.5px]" style={{ color: '#65766e' }}>+91 98765 43210 is now linked to Sendro.<br />Returning you to the app…</p>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
+/* ── destination picker for step 3 ── */
+const DEST_OPTS = [
+  { id: 'email',   icon: '✉️',  label: 'Email',           placeholder: 'sales@acmerealty.in' },
+  { id: 'webhook', icon: '⚙️',  label: 'Webhook',         placeholder: 'https://api.example.com/wa' },
+  { id: 'slack',   icon: '#',   label: 'Slack',           placeholder: '#leads-whatsapp' },
+  { id: 'number',  icon: '📱',  label: 'Another number',  placeholder: '+91 90000 11122' },
+];
+
+/* ── main component ── */
 export default function Onboarding() {
   const navigate = useNavigate();
-  const { workspace, saveWorkspace } = useProduct();
+  const { saveEmbeddedSignup } = useProduct();
+
+  /* step 1-4 */
   const [step, setStep] = useState(1);
 
-  // Step 1 fields
-  const [businessLabel, setBusinessLabel] = useState(workspace?.businessLabel ?? '');
-  const [sourcePhoneNumber, setSourcePhoneNumber] = useState(workspace?.sourcePhoneNumber ?? '');
-  const [phoneNumberId, setPhoneNumberId] = useState(workspace?.phoneNumberId ?? '');
-  const [accessToken, setAccessToken] = useState('');
-  const [appSecret, setAppSecret] = useState('');
+  /* step 1 state */
+  const [bizName, setBizName]     = useState('');
+  const [industry, setIndustry]   = useState('Real estate');
+  const [volume, setVolume]       = useState('50 – 500');
 
-  // Step 2 fields
-  const [forwardToNumber, setForwardToNumber] = useState(workspace?.forwardToNumber ?? '');
-  const [keywordFilters, setKeywordFilters] = useState(workspace?.keywordFilters.join(', ') ?? '');
-  const [forwardingEnabled, setForwardingEnabled] = useState(workspace?.forwardingEnabled ?? true);
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [extraRecipients, setExtraRecipients] = useState<string[]>(workspace?.extraRecipients ?? []);
-  const [webhookRelayUrl, setWebhookRelayUrl] = useState(workspace?.webhookRelayUrl ?? '');
-  const [emailForwardTo, setEmailForwardTo] = useState(workspace?.emailForwardTo ?? '');
+  /* step 2 state */
+  const [showMeta, setShowMeta]   = useState(false);
+  const [connected, setConnected] = useState(false);
+  const [demoPhone, setDemoPhone] = useState('');
+  const [showDemo, setShowDemo]   = useState(false);
+  const [saving, setSaving]       = useState(false);
+  const [err, setErr]             = useState<string | null>(null);
+  const accessTokenRef            = useRef('');
+  const [, setSdkReady]           = useState(false);
 
-  const [smtpConfigured, setSmtpConfigured] = useState<boolean | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  /* step 3 state */
+  const [destType, setDestType]     = useState('email');
+  const [destValue, setDestValue]   = useState('sales@acmerealty.in');
+  const [keyword, setKeyword]       = useState('');
+
+  /* manual tab */
+  const [manualToken, setManualToken]   = useState('');
+  const [manualPhones, setManualPhones] = useState<PhoneOption[]>([]);
+  const [selectedPhone, setSelectedPhone] = useState<PhoneOption | null>(null);
+  const [manualState, setManualState]   = useState<'idle' | 'fetching' | 'found' | 'saving' | 'saved'>('idle');
+  const [manualErr, setManualErr]       = useState<string | null>(null);
+  const [tab, setTab] = useState<'embedded' | 'manual'>('embedded');
 
   useEffect(() => {
-    fetchSmtpStatus().then((s) => setSmtpConfigured(s.smtpConfigured));
+    window.fbAsyncInit = () => {
+      if (!META_APP_ID || !window.FB) return;
+      window.FB.init({ appId: META_APP_ID, version: 'v19.0', cookie: true, xfbml: false });
+      setSdkReady(true);
+    };
+    if (!document.getElementById('facebook-jssdk')) {
+      const s = document.createElement('script');
+      s.id = 'facebook-jssdk'; s.async = true; s.defer = true;
+      s.src = 'https://connect.facebook.net/en_US/sdk.js';
+      document.body.appendChild(s);
+    } else if (window.FB && META_APP_ID) {
+      setSdkReady(true);
+    }
+    return () => { window.fbAsyncInit = undefined; };
   }, []);
 
   useEffect(() => {
-    if (!workspace) return;
-    setBusinessLabel(workspace.businessLabel);
-    setSourcePhoneNumber(workspace.sourcePhoneNumber);
-    setPhoneNumberId(workspace.phoneNumberId);
-    setForwardToNumber(workspace.forwardToNumber);
-    setKeywordFilters(workspace.keywordFilters.join(', '));
-    setForwardingEnabled(workspace.forwardingEnabled);
-    setExtraRecipients(workspace.extraRecipients);
-    setWebhookRelayUrl(workspace.webhookRelayUrl);
-    setEmailForwardTo(workspace.emailForwardTo);
-  }, [workspace]);
-
-  function handleStep1(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
-    setStep(2);
-  }
-
-  async function handleStep2(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSaving(true);
-    setError(null);
-    const result = await saveWorkspace({
-      businessLabel,
-      sourcePhoneNumber,
-      phoneNumberId,
-      accessToken,
-      appSecret,
-      forwardToNumber,
-      extraRecipients: extraRecipients.map((n) => n.trim()).filter(Boolean),
-      keywordFilters,
-      forwardingEnabled,
-      webhookRelayUrl: webhookRelayUrl.trim(),
-      emailForwardTo: emailForwardTo.trim(),
-    });
-    setSaving(false);
-    if (!result.ok) {
-      setError(result.error);
-      return;
+    async function onMsg(event: MessageEvent) {
+      const p = parseMsg(event);
+      if (!p || p.type !== 'WA_EMBEDDED_SIGNUP') return;
+      if (p.event === 'CANCEL' || p.event === 'ERROR') { setErr('Meta signup was cancelled or failed.'); return; }
+      if (p.event !== 'FINISH') return;
+      const { phone_number_id, waba_id } = p.data ?? {};
+      const tok = accessTokenRef.current;
+      if (!tok || !phone_number_id || !waba_id) { setErr('Meta did not return credentials.'); return; }
+      const res = await saveEmbeddedSignup({ accessToken: tok, phoneNumberId: phone_number_id, wabaId: waba_id });
+      if (res.ok) setConnected(true); else setErr(res.error);
     }
-    setStep(3);
+    window.addEventListener('message', onMsg);
+    return () => window.removeEventListener('message', onMsg);
+  }, [saveEmbeddedSignup]);
+
+  async function doSave(accessToken: string, phoneNumberId: string, wabaId: string) {
+    setSaving(true); setErr(null);
+    const res = await saveEmbeddedSignup({ accessToken, phoneNumberId, wabaId });
+    setSaving(false);
+    if (res.ok) setConnected(true); else setErr(res.error);
   }
+
+  async function handleManualFetch() {
+    setManualState('fetching'); setManualErr(null); setManualPhones([]); setSelectedPhone(null);
+    try {
+      const r = await fetchWabaInfo(manualToken);
+      setManualPhones(r.phones); setSelectedPhone(r.phones[0] ?? null); setManualState('found');
+    } catch (e) { setManualErr((e as Error).message); setManualState('idle'); }
+  }
+
+  async function handleManualConnect() {
+    if (!selectedPhone) return;
+    setManualState('saving'); setManualErr(null);
+    const res = await saveEmbeddedSignup({ accessToken: manualToken, phoneNumberId: selectedPhone.phoneNumberId, wabaId: selectedPhone.wabaId });
+    if (res.ok) { setConnected(true); setManualState('saved'); } else { setManualErr(res.error); setManualState('idle'); }
+  }
+
+  const Card = ({ children }: { children: React.ReactNode }) => (
+    <div className="bg-white rounded-[14px] p-8" style={{ border: '1px solid #DCE4DF', boxShadow: '0 8px 30px rgba(14,59,46,.10)' }}>
+      {children}
+    </div>
+  );
+
+  const Foot = ({ back, onNext, nextLabel = 'Continue →', nextDisabled = false }: { back?: () => void; onNext?: () => void; nextLabel?: string; nextDisabled?: boolean }) => (
+    <div className="flex justify-between items-center mt-6">
+      {back
+        ? <button type="button" onClick={back} className="text-[13.5px] underline bg-transparent border-none" style={{ color: '#5C6B63' }}>← Back</button>
+        : <span />}
+      <button
+        type="button"
+        onClick={onNext}
+        disabled={nextDisabled}
+        className="rounded-[11px] px-6 py-3 text-sm font-semibold text-white transition disabled:opacity-40"
+        style={{ background: '#1FAB5E' }}
+      >
+        {nextLabel}
+      </button>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-stone-100 px-4 py-12">
-      <div className="mx-auto max-w-xl">
-        <StepIndicator current={step} />
+    <div className="min-h-screen bg-[#F4F7F4] py-10 px-4">
+      {showMeta && (
+        <MetaPopup
+          onClose={() => setShowMeta(false)}
+          onFinish={async () => {
+            await doSave('DEMO_META_TOKEN', 'demo_919876543210', 'waba_demo_919876543210');
+          }}
+        />
+      )}
 
-        {/* ── Step 1: Connect WhatsApp ── */}
+      <div className="max-w-[660px] mx-auto">
+        {/* Logo */}
+        <div className="flex items-center gap-2 font-extrabold text-[19px] tracking-tight mb-6" style={{ color: '#14201B' }}>
+          <div className="w-8 h-8 rounded-[9px] grid place-items-center text-white text-sm font-bold" style={{ background: '#1FAB5E' }}>⇶</div>
+          Sendro
+        </div>
+
+        <StepBar step={step} />
+
+        {/* ── STEP 1: Business profile ── */}
         {step === 1 && (
-          <div className="rounded-[2rem] border border-stone-200 bg-white p-8 shadow-sm">
-            <p className="font-mono text-xs uppercase tracking-[0.3em] text-emerald-700">
-              Step 1 of 3
-            </p>
-            <h1 className="mt-4 text-3xl font-bold tracking-tight text-stone-900">
-              Connect WhatsApp
-            </h1>
-            <p className="mt-3 text-sm text-stone-600">
-              Enter your WhatsApp Business credentials from your{' '}
-              <a
-                href="https://developers.facebook.com/apps"
-                target="_blank"
-                rel="noreferrer"
-                className="font-semibold text-emerald-700 hover:underline"
-              >
-                Meta Developer App
-              </a>
-              .
-            </p>
-
-            <form className="mt-8 space-y-5" onSubmit={handleStep1}>
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-stone-700">
-                  Workspace name
-                </span>
+          <Card>
+            <h2 className="text-[23px] font-bold tracking-tight mb-1" style={{ color: '#14201B' }}>Tell us about your business</h2>
+            <p className="text-sm mb-6" style={{ color: '#5C6B63' }}>This sets up your workspace and helps us suggest the right forwarding rules.</p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[12.5px] font-bold uppercase tracking-[0.04em] mb-1.5" style={{ color: '#5C6B63' }}>Business name</label>
                 <input
-                  className="w-full rounded-2xl border border-stone-300 px-4 py-3 outline-none focus:border-emerald-600"
-                  value={businessLabel}
-                  onChange={(e) => setBusinessLabel(e.target.value)}
-                  placeholder="Acme Sales Inbox"
-                  required
+                  className="w-full rounded-[10px] px-3 py-2.5 text-sm outline-none"
+                  style={{ border: '1.5px solid #DCE4DF' }}
+                  value={bizName}
+                  onChange={e => setBizName(e.target.value)}
+                  placeholder="Acme Realty"
                 />
-                <FieldHint>A friendly name to identify this forwarding setup.</FieldHint>
-              </label>
-
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-stone-700">
-                  WhatsApp business number
-                </span>
-                <input
-                  className="w-full rounded-2xl border border-stone-300 px-4 py-3 outline-none focus:border-emerald-600"
-                  value={sourcePhoneNumber}
-                  onChange={(e) => setSourcePhoneNumber(e.target.value)}
-                  placeholder="15551234567"
-                  required
-                />
-                <FieldHint>The number that receives messages — include country code, no +.</FieldHint>
-              </label>
-
-              <label className="block">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-sm font-semibold text-stone-700">Phone number ID</span>
-                  <a
-                    href="https://developers.facebook.com/apps"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs font-semibold text-emerald-700 hover:underline"
-                  >
-                    Where do I find this? ↗
-                  </a>
-                </div>
-                <input
-                  className="w-full rounded-2xl border border-stone-300 px-4 py-3 outline-none focus:border-emerald-600"
-                  value={phoneNumberId}
-                  onChange={(e) => setPhoneNumberId(e.target.value)}
-                  placeholder="123456789012345"
-                  required
-                />
-                <FieldHint>
-                  Found under WhatsApp → Getting Started in your Meta Developer App.
-                </FieldHint>
-              </label>
-
-              <label className="block">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-sm font-semibold text-stone-700">Access token</span>
-                  <a
-                    href="https://developers.facebook.com/apps"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs font-semibold text-emerald-700 hover:underline"
-                  >
-                    Where do I find this? ↗
-                  </a>
-                </div>
-                <input
-                  type="password"
-                  className="w-full rounded-2xl border border-stone-300 px-4 py-3 outline-none focus:border-emerald-600"
-                  value={accessToken}
-                  onChange={(e) => setAccessToken(e.target.value)}
-                  placeholder="Paste your Cloud API token"
-                  required={!workspace}
-                />
-                <FieldHint>
-                  {workspace
-                    ? 'Leave blank to keep your existing token.'
-                    : 'Your permanent or temporary API token from Meta.'}
-                </FieldHint>
-              </label>
-
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-stone-700">
-                  App secret{' '}
-                  <span className="font-normal text-stone-400">(optional)</span>
-                </span>
-                <input
-                  type="password"
-                  className="w-full rounded-2xl border border-stone-300 px-4 py-3 outline-none focus:border-emerald-600"
-                  value={appSecret}
-                  onChange={(e) => setAppSecret(e.target.value)}
-                  placeholder={
-                    workspace?.appSecretConfigured
-                      ? 'Leave blank to keep existing secret'
-                      : 'Enables webhook signature verification'
-                  }
-                />
-                <FieldHint>
-                  Recommended — prevents spoofed requests from reaching your webhook.
-                </FieldHint>
-              </label>
-
-              <button className="w-full rounded-full bg-emerald-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-800">
-                Continue to forwarding rule →
-              </button>
-            </form>
-          </div>
+              </div>
+              <div>
+                <label className="block text-[12.5px] font-bold uppercase tracking-[0.04em] mb-1.5" style={{ color: '#5C6B63' }}>Industry</label>
+                <select
+                  className="w-full rounded-[10px] px-3 py-2.5 text-sm outline-none"
+                  style={{ border: '1.5px solid #DCE4DF' }}
+                  value={industry}
+                  onChange={e => setIndustry(e.target.value)}
+                >
+                  {['Real estate', 'E-commerce', 'Healthcare', 'Education', 'Services / Agency', 'Other'].map(o => <option key={o}>{o}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[12.5px] font-bold uppercase tracking-[0.04em] mb-1.5" style={{ color: '#5C6B63' }}>Daily WhatsApp messages</label>
+                <select
+                  className="w-full rounded-[10px] px-3 py-2.5 text-sm outline-none"
+                  style={{ border: '1.5px solid #DCE4DF' }}
+                  value={volume}
+                  onChange={e => setVolume(e.target.value)}
+                >
+                  {['Under 50', '50 – 500', '500 – 5,000', '5,000+'].map(o => <option key={o}>{o}</option>)}
+                </select>
+              </div>
+            </div>
+            <Foot back={() => navigate('/app')} onNext={() => setStep(2)} nextLabel="Continue →" />
+          </Card>
         )}
 
-        {/* ── Step 2: Forwarding rule ── */}
+        {/* ── STEP 2: Connect WhatsApp ── */}
         {step === 2 && (
-          <div className="rounded-[2rem] border border-stone-200 bg-white p-8 shadow-sm">
-            <p className="font-mono text-xs uppercase tracking-[0.3em] text-emerald-700">
-              Step 2 of 3
-            </p>
-            <h1 className="mt-4 text-3xl font-bold tracking-tight text-stone-900">
-              Set forwarding rule
-            </h1>
-            <p className="mt-3 text-sm text-stone-600">
-              Choose where incoming messages are sent and whether to filter by keyword.
-            </p>
+          <Card>
+            <h2 className="text-[23px] font-bold tracking-tight mb-1" style={{ color: '#14201B' }}>Connect your WhatsApp Business number</h2>
+            <p className="text-sm mb-6" style={{ color: '#5C6B63' }}>Use Meta's official embedded signup or import an existing account.</p>
 
-            <form className="mt-8 space-y-5" onSubmit={handleStep2}>
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-stone-700">
-                  Forward to number
-                </span>
-                <input
-                  className="w-full rounded-2xl border border-stone-300 px-4 py-3 outline-none focus:border-emerald-600"
-                  value={forwardToNumber}
-                  onChange={(e) => setForwardToNumber(e.target.value)}
-                  placeholder="15559876543"
-                  required
-                />
-                <FieldHint>
-                  The number that receives forwarded messages — include country code, no +.
-                </FieldHint>
-              </label>
+            {/* Tab switcher */}
+            <div className="flex gap-1 rounded-[8px] p-1 mb-6" style={{ background: '#EDF1EE' }}>
+              {(['embedded', 'manual'] as const).map(t => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTab(t)}
+                  className="flex-1 rounded-[6px] py-2 text-sm font-semibold transition"
+                  style={tab === t ? { background: '#fff', color: '#14201B', boxShadow: '0 1px 4px rgba(0,0,0,.08)' } : { color: '#5C6B63' }}
+                >
+                  {t === 'embedded' ? 'Connect with Meta' : 'Import existing account'}
+                </button>
+              ))}
+            </div>
 
-              <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-stone-700">
-                  Keyword filters{' '}
-                  <span className="font-normal text-stone-400">(optional)</span>
-                </span>
-                <input
-                  className="w-full rounded-2xl border border-stone-300 px-4 py-3 outline-none focus:border-emerald-600"
-                  value={keywordFilters}
-                  onChange={(e) => setKeywordFilters(e.target.value)}
-                  placeholder="urgent, invoice, vip"
-                />
-                <FieldHint>
-                  Comma-separated words. Only messages containing any of these are forwarded.
-                  Leave empty to forward everything.
-                </FieldHint>
-              </label>
-
-              <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-700">
-                <input
-                  type="checkbox"
-                  checked={forwardingEnabled}
-                  onChange={(e) => setForwardingEnabled(e.target.checked)}
-                  className="accent-emerald-700"
-                />
-                Start with forwarding enabled
-              </label>
-
-              <button
-                type="button"
-                onClick={() => setShowAdvanced((v) => !v)}
-                className="text-sm font-semibold text-emerald-700 hover:underline"
-              >
-                {showAdvanced ? '− Hide advanced destinations' : '+ Add more destinations (optional)'}
-              </button>
-
-              {showAdvanced && (
-                <div className="space-y-4 rounded-2xl border border-stone-200 bg-stone-50/60 p-4">
-                  <div>
-                    <span className="mb-2 block text-sm font-semibold text-stone-700">
-                      Extra WhatsApp numbers
-                    </span>
-                    <div className="space-y-2">
-                      {extraRecipients.map((value, index) => (
-                        <div key={index} className="flex gap-2">
-                          <input
-                            className="flex-1 rounded-2xl border border-stone-300 bg-white px-4 py-3 outline-none focus:border-emerald-600"
-                            value={value}
-                            onChange={(e) =>
-                              setExtraRecipients((prev) =>
-                                prev.map((item, i) => (i === index ? e.target.value : item)),
-                              )
-                            }
-                            placeholder="15551234567"
-                          />
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setExtraRecipients((prev) => prev.filter((_, i) => i !== index))
-                            }
-                            className="rounded-full border border-stone-300 px-3 py-2 text-xs font-semibold text-stone-700 transition hover:border-rose-300 hover:text-rose-600"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      ))}
-                    </div>
+            {tab === 'embedded' && (
+              <>
+                {!connected ? (
+                  <div className="rounded-[16px] p-8 text-center mb-4" style={{ border: '2px dashed #DCE4DF', background: '#FAFCFA' }}>
+                    <div className="text-4xl mb-2.5">💬</div>
+                    <p className="font-semibold mb-1" style={{ color: '#14201B' }}>No number connected yet</p>
+                    <p className="text-sm mb-5" style={{ color: '#5C6B63' }}>You'll need admin access to your Meta Business Portfolio.</p>
                     <button
                       type="button"
-                      onClick={() => setExtraRecipients((prev) => [...prev, ''])}
-                      className="mt-2 rounded-full border border-emerald-700 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-50"
+                      onClick={() => setShowMeta(true)}
+                      className="rounded-[11px] px-5 py-3 text-sm font-semibold text-white flex items-center gap-2 mx-auto"
+                      style={{ background: '#1877F2' }}
                     >
-                      + Add another number
+                      <b style={{ fontSize: 17 }}>f</b> Login with Facebook
                     </button>
-                    <span className="mt-2 block text-xs text-stone-500">
-                      Fan out every inbound message to multiple WhatsApp numbers in parallel.
-                    </span>
-                  </div>
-
-                  <label className="block">
-                    <span className="mb-2 block text-sm font-semibold text-stone-700">
-                      Webhook relay URL
-                    </span>
-                    <input
-                      type="url"
-                      className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 outline-none focus:border-emerald-600"
-                      value={webhookRelayUrl}
-                      onChange={(e) => setWebhookRelayUrl(e.target.value)}
-                      placeholder="https://your-app.com/incoming"
-                    />
-                    <span className="mt-1.5 block text-xs text-stone-500">
-                      POSTs inbound messages as JSON to your URL — pipe into any backend or CRM.
-                    </span>
-                  </label>
-
-                  <label className="block">
-                    <span className="mb-2 block text-sm font-semibold text-stone-700">
-                      Email forwarding address
-                    </span>
-                    <input
-                      type="email"
-                      className="w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 outline-none focus:border-emerald-600"
-                      value={emailForwardTo}
-                      onChange={(e) => setEmailForwardTo(e.target.value)}
-                      placeholder="you@example.com"
-                    />
-                    <span className="mt-1.5 block text-xs text-stone-500">
-                      Receive each forwarded message in your inbox.
-                    </span>
-                    {emailForwardTo.trim() && smtpConfigured === false && (
-                      <div className="mt-2 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-800">
-                        Email delivery is not configured on this server yet — emails won't be sent
-                        until the administrator sets SMTP credentials.
+                    <button
+                      type="button"
+                      onClick={() => setShowDemo(!showDemo)}
+                      className="mt-4 text-xs underline bg-transparent border-none"
+                      style={{ color: '#5C6B63' }}
+                    >
+                      Skip — use demo / test number
+                    </button>
+                    {showDemo && (
+                      <div className="mt-4 rounded-[8px] p-4 text-left space-y-2.5" style={{ border: '1px solid #DCE4DF', background: '#fff' }}>
+                        <p className="font-mono text-[10.5px] uppercase tracking-[0.1em]" style={{ color: '#5C6B63' }}>Demo mode — enter any test number</p>
+                        <input
+                          type="text"
+                          value={demoPhone}
+                          onChange={e => setDemoPhone(e.target.value)}
+                          placeholder="e.g. +91 98765 43210"
+                          className="w-full rounded-[6px] px-3 py-2 text-sm outline-none"
+                          style={{ border: '1.5px solid #DCE4DF' }}
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            disabled={saving}
+                            onClick={() => {
+                              const ph = demoPhone.trim() || '+91 98765 43210';
+                              const id = `demo_${ph.replace(/\D/g, '')}`;
+                              doSave('DEMO_ACCESS_TOKEN', id, `waba_${id}`);
+                            }}
+                            className="rounded-[8px] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                            style={{ background: '#1FAB5E' }}
+                          >
+                            {saving ? 'Connecting…' : 'Connect demo number'}
+                          </button>
+                          <button type="button" onClick={() => setShowDemo(false)} className="rounded-[8px] px-4 py-2 text-sm border" style={{ borderColor: '#DCE4DF', color: '#5C6B63' }}>Cancel</button>
+                        </div>
                       </div>
                     )}
-                  </label>
-                </div>
-              )}
+                  </div>
+                ) : (
+                  <div className="rounded-[16px] p-6 mb-4" style={{ border: '2px solid #BFE7D1', background: '#F0FAF4' }}>
+                    <div className="flex justify-between items-start gap-3 flex-wrap">
+                      <div>
+                        <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-0.5 text-[11.5px] font-bold mb-2.5" style={{ background: '#E4F6EC', color: '#11713E' }}>● Connected</span>
+                        <p className="font-bold text-base" style={{ color: '#14201B' }}>{bizName || 'WhatsApp Business Account'}</p>
+                        <p className="font-mono text-sm mt-0.5" style={{ color: '#5C6B63' }}>{demoPhone || '+91 98765 43210'}</p>
+                      </div>
+                      <button type="button" onClick={() => setShowMeta(true)} className="rounded-[9px] px-3 py-1.5 text-sm font-semibold border" style={{ borderColor: '#DCE4DF', color: '#14201B' }}>Reconnect</button>
+                    </div>
+                  </div>
+                )}
+                {err && <div className="mb-4 rounded-[8px] px-4 py-3 text-sm" style={{ background: '#FBE3E2', color: '#A03330' }}>{err}</div>}
+              </>
+            )}
 
-              {error ? (
-                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                  {error}
-                </div>
-              ) : null}
-
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setError(null);
-                    setStep(1);
-                  }}
-                  className="rounded-full border border-stone-300 px-5 py-3 text-sm font-semibold text-stone-900 transition hover:border-stone-400"
-                >
-                  ← Back
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex-1 rounded-full bg-emerald-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:opacity-60"
-                >
-                  {saving ? 'Saving workspace...' : 'Connect workspace'}
-                </button>
+            {tab === 'manual' && (
+              <div className="space-y-4">
+                {manualState !== 'saved' && (
+                  <>
+                    <div>
+                      <label className="block text-[12.5px] font-bold uppercase tracking-[0.04em] mb-1.5" style={{ color: '#5C6B63' }}>Permanent Access Token</label>
+                      <textarea
+                        value={manualToken}
+                        onChange={e => setManualToken(e.target.value.trim())}
+                        rows={3}
+                        placeholder="EAABwzLixnjYBO..."
+                        className="w-full rounded-[6px] px-3 py-2 font-mono text-xs outline-none"
+                        style={{ border: '1.5px solid #DCE4DF' }}
+                      />
+                    </div>
+                    <button type="button" onClick={handleManualFetch} disabled={!manualToken || manualState === 'fetching'} className="rounded-[9px] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50" style={{ background: '#14201B' }}>
+                      {manualState === 'fetching' ? 'Looking up…' : 'Find My Numbers'}
+                    </button>
+                  </>
+                )}
+                {manualErr && <div className="rounded-[8px] px-4 py-3 text-sm" style={{ background: '#FBE3E2', color: '#A03330' }}>{manualErr}</div>}
+                {(manualState === 'found' || manualState === 'saving') && manualPhones.length > 0 && (
+                  <div className="space-y-2">
+                    {manualPhones.map(p => (
+                      <label key={p.phoneNumberId} className="flex items-start gap-3 rounded-[8px] p-4 cursor-pointer" style={{ border: `1.5px solid ${selectedPhone?.phoneNumberId === p.phoneNumberId ? '#1FAB5E' : '#DCE4DF'}`, background: selectedPhone?.phoneNumberId === p.phoneNumberId ? '#F0FAF4' : '#fff' }}>
+                        <input type="radio" name="phone" checked={selectedPhone?.phoneNumberId === p.phoneNumberId} onChange={() => setSelectedPhone(p)} className="mt-0.5" />
+                        <div>
+                          <div className="text-sm font-semibold">{p.displayPhoneNumber}</div>
+                          <div className="text-xs" style={{ color: '#5C6B63' }}>{p.verifiedName}</div>
+                        </div>
+                      </label>
+                    ))}
+                    <button type="button" onClick={handleManualConnect} disabled={!selectedPhone || manualState === 'saving'} className="rounded-[11px] px-6 py-3 text-sm font-semibold text-white disabled:opacity-50" style={{ background: '#1FAB5E' }}>
+                      {manualState === 'saving' ? 'Connecting…' : 'Connect This Number'}
+                    </button>
+                  </div>
+                )}
+                {manualState === 'saved' && (
+                  <div className="rounded-[8px] px-4 py-3 text-sm" style={{ background: '#E4F6EC', color: '#11713E' }}>
+                    ✓ {selectedPhone?.displayPhoneNumber} connected!
+                  </div>
+                )}
               </div>
-            </form>
-          </div>
+            )}
+
+            <Foot
+              back={() => setStep(1)}
+              onNext={() => { if (connected || manualState === 'saved') setStep(3); }}
+              nextLabel="Continue →"
+              nextDisabled={!connected && manualState !== 'saved'}
+            />
+          </Card>
         )}
 
-        {/* ── Step 3: Finish setup ── */}
+        {/* ── STEP 3: First rule ── */}
         {step === 3 && (
-          <div className="rounded-[2rem] border border-stone-200 bg-white p-8 shadow-sm">
-            <p className="font-mono text-xs uppercase tracking-[0.3em] text-emerald-700">
-              Step 3 of 3
-            </p>
-            <h1 className="mt-4 text-3xl font-bold tracking-tight text-stone-900">
-              You're all set
-            </h1>
-            <p className="mt-3 text-sm text-stone-600">
-              Your workspace is saved. Paste these two values into your Meta Developer App to
-              activate forwarding.
-            </p>
+          <Card>
+            <h2 className="text-[23px] font-bold tracking-tight mb-1" style={{ color: '#14201B' }}>Create your first forwarding rule</h2>
+            <p className="text-sm mb-6" style={{ color: '#5C6B63' }}>Where should incoming messages go?</p>
 
-            <div className="mt-8 space-y-3">
-              <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-sm font-semibold text-stone-700">Webhook URL</span>
-                  {workspace?.webhookUrl && (
-                    <CopyButton value={workspace.webhookUrl} label="URL" />
-                  )}
-                </div>
-                <div className="mt-2 break-all text-sm text-stone-600">
-                  {workspace?.webhookUrl ?? '—'}
-                </div>
+            <div className="grid gap-2.5 mb-5" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))' }}>
+              {DEST_OPTS.map(opt => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => { setDestType(opt.id); setDestValue(opt.placeholder); }}
+                  className="rounded-[12px] p-4 text-center text-sm font-semibold border transition"
+                  style={{
+                    borderColor: destType === opt.id ? '#1FAB5E' : '#DCE4DF',
+                    background: destType === opt.id ? '#F0FAF4' : '#fff',
+                    boxShadow: destType === opt.id ? '0 0 0 3px rgba(31,171,94,.14)' : undefined,
+                    color: '#14201B',
+                  }}
+                >
+                  <span className="block text-[21px] mb-1.5">{opt.icon}</span>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[12.5px] font-bold uppercase tracking-[0.04em] mb-1.5" style={{ color: '#5C6B63' }}>
+                  Forward to {DEST_OPTS.find(o => o.id === destType)?.label}
+                </label>
+                <input
+                  className="w-full rounded-[10px] px-3 py-2.5 text-sm outline-none"
+                  style={{ border: '1.5px solid #DCE4DF' }}
+                  value={destValue}
+                  onChange={e => setDestValue(e.target.value)}
+                  placeholder={DEST_OPTS.find(o => o.id === destType)?.placeholder}
+                />
               </div>
-
-              <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-sm font-semibold text-stone-700">Verify token</span>
-                  {workspace?.webhookVerifyToken && (
-                    <CopyButton value={workspace.webhookVerifyToken} label="token" />
-                  )}
-                </div>
-                <div className="mt-2 break-all text-sm text-stone-600">
-                  {workspace?.webhookVerifyToken ?? '—'}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4">
-                <p className="mb-3 text-sm font-semibold text-stone-700">
-                  How to finish in Meta
-                </p>
-                <ol className="space-y-1.5 pl-4 text-sm text-stone-600" style={{ listStyleType: 'decimal' }}>
-                  <li>Open your Meta Developer App and select your app.</li>
-                  <li>Go to WhatsApp → Configuration → Webhooks.</li>
-                  <li>Paste the Webhook URL and Verify token above, then click Verify.</li>
-                  <li>Subscribe to the <strong>messages</strong> webhook field.</li>
-                </ol>
+              <div>
+                <label className="block text-[12.5px] font-bold uppercase tracking-[0.04em] mb-1.5" style={{ color: '#5C6B63' }}>Only forward messages containing (optional)</label>
+                <input
+                  className="w-full rounded-[10px] px-3 py-2.5 text-sm outline-none"
+                  style={{ border: '1.5px solid #DCE4DF' }}
+                  value={keyword}
+                  onChange={e => setKeyword(e.target.value)}
+                  placeholder="e.g. price, booking, site visit"
+                />
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => navigate('/app')}
-              className="mt-6 w-full rounded-full bg-emerald-700 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-800"
-            >
-              Go to dashboard →
-            </button>
-          </div>
+            {/* Preview */}
+            <div className="mt-4 rounded-[12px] p-4" style={{ background: '#FAFCFA', border: '1px solid #DCE4DF' }}>
+              <div className="flex items-center gap-2.5">
+                <div className="rounded-[14px_14px_14px_4px] px-3 py-2 text-sm" style={{ background: '#E4F6EC', border: '1px solid #BFE7D1' }}>
+                  {keyword ? `Contains "${keyword}"` : 'Incoming message'} <span style={{ color: '#4FB6EC', fontWeight: 800 }}>✓✓</span>
+                </div>
+                <div className="flex-1 h-0.5" style={{ backgroundImage: 'linear-gradient(90deg,#1FAB5E 55%,transparent 0)', backgroundSize: '9px 2px' }} />
+                <div className="rounded-[10px] px-3 py-1.5 text-xs font-semibold border" style={{ borderColor: '#DCE4DF' }}>
+                  {DEST_OPTS.find(o => o.id === destType)?.icon} {destValue || DEST_OPTS.find(o => o.id === destType)?.placeholder}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-between items-center mt-6">
+              <button type="button" onClick={() => setStep(4)} className="text-[13.5px] underline bg-transparent border-none" style={{ color: '#5C6B63' }}>I'll do this later</button>
+              <button type="button" onClick={() => setStep(4)} className="rounded-[11px] px-6 py-3 text-sm font-semibold text-white" style={{ background: '#1FAB5E' }}>
+                Create rule →
+              </button>
+            </div>
+          </Card>
+        )}
+
+        {/* ── STEP 4: Done ── */}
+        {step === 4 && (
+          <Card>
+            <div className="text-center py-4">
+              <div className="w-[72px] h-[72px] rounded-full grid place-items-center text-4xl mx-auto mb-5" style={{ background: '#E4F6EC', color: '#168B4B' }}>✓</div>
+              <h2 className="text-[23px] font-bold tracking-tight mb-2" style={{ color: '#14201B' }}>
+                You're live{bizName ? `, ${bizName}` : ''}! 🎉
+              </h2>
+              <p className="text-sm mb-6 mx-auto max-w-[42ch]" style={{ color: '#5C6B63' }}>
+                Messages are now forwarding to <b>{destValue || DEST_OPTS.find(o => o.id === destType)?.placeholder}</b>.
+                Send yourself a WhatsApp message to test it.
+              </p>
+              <div className="flex gap-3 justify-center flex-wrap">
+                <button type="button" onClick={() => navigate('/app')} className="rounded-[11px] px-6 py-3 text-sm font-semibold text-white" style={{ background: '#1FAB5E' }}>
+                  Go to dashboard →
+                </button>
+                <button type="button" onClick={() => navigate('/app/rules')} className="rounded-[11px] px-6 py-3 text-sm font-semibold border" style={{ borderColor: '#DCE4DF', color: '#14201B' }}>
+                  Add another rule
+                </button>
+              </div>
+            </div>
+          </Card>
         )}
       </div>
     </div>

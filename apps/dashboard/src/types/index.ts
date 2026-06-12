@@ -30,6 +30,7 @@ export interface WorkspaceSetup {
   businessLabel: string;
   sourcePhoneNumber: string;
   phoneNumberId: string;
+  wabaId: string;
   accessTokenPreview: string;
   appSecretConfigured: boolean;
   forwardToNumber: string;
@@ -56,6 +57,12 @@ export interface WorkspaceSettingsInput {
   forwardingEnabled: boolean;
   webhookRelayUrl: string;
   emailForwardTo: string;
+}
+
+export interface EmbeddedSignupCredentials {
+  accessToken: string;
+  phoneNumberId: string;
+  wabaId: string;
 }
 
 export interface PrototypeMessageLog {

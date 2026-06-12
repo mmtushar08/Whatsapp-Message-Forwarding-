@@ -1,0 +1,50 @@
+# Render Blueprint — deploys the forwarder backend (apps/forwarder).
+# The dashboard frontend deploys separately to Vercel (see vercel.json).
+#
+# Usage: push to GitHub, then in Render: New + > Blueprint > select this repo.
+# Docs: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: whatsapp-forwarder
+    runtime: node
+    # SQLite needs a persistent disk, which requires a paid instance type.
+    # The free tier has no disk: the database would be wiped on every deploy.
+    plan: starter
+    buildCommand: npm install --workspace=apps/forwarder --workspace=packages/shared && npm run build --workspace=apps/forwarder
+    startCommand: node apps/forwarder/dist/index.js
+    healthCheckPath: /health
+    disk:
+      name: forwarder-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DB_PATH
+        value: /var/data/forwarder.db
+      - key: TRUST_PROXY
+        value: "1"
+      - key: SESSION_TTL_HOURS
+        value: "24"
+      - key: LOG_LEVEL
+        value: info
+      # Auto-generated secrets. Note: if APP_ENCRYPTION_KEY ever changes,
+      # stored WhatsApp tokens become unreadable and users must reconnect.
+      - key: APP_ENCRYPTION_KEY
+        generateValue: true
+      - key: WEBHOOK_VERIFY_TOKEN
+        generateValue: true
+      - key: ADMIN_TOKEN
+        generateValue: true
+      # Fill these in when Render prompts during blueprint creation:
+      # CORS_ORIGIN  = your Vercel dashboard URL (e.g. https://your-app.vercel.app)
+      # PUBLIC_APP_URL = this service's own URL (e.g. https://whatsapp-forwarder.onrender.com)
+      - key: CORS_ORIGIN
+        sync: false
+      - key: PUBLIC_APP_URL
+        sync: false
+      # Optional integrations — add in the Render dashboard when needed:
+      # WHATSAPP_APP_SECRET (webhook signature verification, recommended)
+      # SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS, SMTP_FROM (email forwarding)
+      # RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET,
+      # RAZORPAY_PLAN_STARTER, RAZORPAY_PLAN_PRO, RAZORPAY_PLAN_BUSINESS (billing)

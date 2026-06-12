@@ -7,6 +7,7 @@ export interface WorkspaceRecord {
   business_label: string;
   source_phone_number: string;
   phone_number_id: string;
+  waba_id: string;
   access_token_encrypted: string;
   app_secret_encrypted: string | null;
   access_token_preview: string;
@@ -28,6 +29,7 @@ export interface WorkspaceView {
   businessLabel: string;
   sourcePhoneNumber: string;
   phoneNumberId: string;
+  wabaId: string;
   accessTokenPreview: string;
   appSecretConfigured: boolean;
   forwardToNumber: string;
@@ -46,6 +48,7 @@ export interface WorkspaceInput {
   businessLabel: string;
   sourcePhoneNumber: string;
   phoneNumberId: string;
+  wabaId?: string;
   accessToken?: string;
   appSecret?: string;
   forwardToNumber: string;
@@ -63,6 +66,7 @@ export interface WorkspaceRuntime {
   businessLabel: string;
   sourcePhoneNumber: string;
   phoneNumberId: string;
+  wabaId: string;
   accessToken: string;
   appSecret: string;
   forwardToNumber: string;
@@ -86,6 +90,7 @@ function toWorkspaceView(record: WorkspaceRecord): WorkspaceView {
     businessLabel: record.business_label,
     sourcePhoneNumber: record.source_phone_number,
     phoneNumberId: record.phone_number_id,
+    wabaId: record.waba_id ?? '',
     accessTokenPreview: record.access_token_preview,
     appSecretConfigured: Boolean(record.app_secret_encrypted),
     forwardToNumber: record.forward_to_number,
@@ -108,6 +113,7 @@ function toWorkspaceRuntime(record: WorkspaceRecord): WorkspaceRuntime {
     businessLabel: record.business_label,
     sourcePhoneNumber: record.source_phone_number,
     phoneNumberId: record.phone_number_id,
+    wabaId: record.waba_id ?? '',
     accessToken: decryptSecret(record.access_token_encrypted),
     appSecret: record.app_secret_encrypted ? decryptSecret(record.app_secret_encrypted) : '',
     forwardToNumber: record.forward_to_number,
@@ -160,16 +166,17 @@ export function upsertWorkspace(userId: string, input: WorkspaceInput): Workspac
 
   db.prepare(
     `INSERT INTO workspaces (
-      id, user_id, business_label, source_phone_number, phone_number_id,
+      id, user_id, business_label, source_phone_number, phone_number_id, waba_id,
       access_token_encrypted, app_secret_encrypted, access_token_preview,
       forward_to_number, extra_recipients, keyword_filters,
       forwarding_enabled, webhook_verify_token, webhook_url,
       webhook_relay_url, email_forward_to, status, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id) DO UPDATE SET
       business_label = excluded.business_label,
       source_phone_number = excluded.source_phone_number,
       phone_number_id = excluded.phone_number_id,
+      waba_id = excluded.waba_id,
       access_token_encrypted = excluded.access_token_encrypted,
       app_secret_encrypted = excluded.app_secret_encrypted,
       access_token_preview = excluded.access_token_preview,
@@ -187,6 +194,7 @@ export function upsertWorkspace(userId: string, input: WorkspaceInput): Workspac
     input.businessLabel,
     input.sourcePhoneNumber,
     input.phoneNumberId,
+    input.wabaId ?? '',
     encryptedAccessToken,
     encryptedAppSecret,
     accessTokenPreview,
@@ -199,6 +207,73 @@ export function upsertWorkspace(userId: string, input: WorkspaceInput): Workspac
     input.webhookRelayUrl.trim(),
     input.emailForwardTo.trim(),
     'needs_webhook_setup',
+    existing?.created_at ?? timestamp,
+    timestamp,
+  );
+
+  return getWorkspaceByUserId(userId) as WorkspaceView;
+}
+
+export function saveEmbeddedSignupCredentials(
+  userId: string,
+  input: {
+    accessToken: string;
+    phoneNumberId: string;
+    wabaId: string;
+    webhookBaseUrl?: string;
+  },
+): WorkspaceView {
+  const db = getDatabase();
+  const existing = db
+    .prepare('SELECT * FROM workspaces WHERE user_id = ?')
+    .get(userId) as WorkspaceRecord | undefined;
+  const timestamp = new Date().toISOString();
+  const workspaceId = existing?.id ?? createId('workspace');
+  const verifyToken = existing?.webhook_verify_token ?? createId('verify');
+  const baseUrl = (input.webhookBaseUrl ?? process.env['PUBLIC_APP_URL'] ?? '').replace(/\/$/, '');
+  const webhookUrl = existing?.webhook_url ?? `${baseUrl || 'https://your-domain.com'}/webhook`;
+  const cleanToken = input.accessToken.trim();
+
+  if (!cleanToken) {
+    throw new Error('access_token is required');
+  }
+
+  db.prepare(
+    `INSERT INTO workspaces (
+      id, user_id, business_label, source_phone_number, phone_number_id, waba_id,
+      access_token_encrypted, app_secret_encrypted, access_token_preview,
+      forward_to_number, extra_recipients, keyword_filters,
+      forwarding_enabled, webhook_verify_token, webhook_url,
+      webhook_relay_url, email_forward_to, status, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(user_id) DO UPDATE SET
+      business_label = excluded.business_label,
+      phone_number_id = excluded.phone_number_id,
+      waba_id = excluded.waba_id,
+      access_token_encrypted = excluded.access_token_encrypted,
+      access_token_preview = excluded.access_token_preview,
+      forwarding_enabled = excluded.forwarding_enabled,
+      status = excluded.status,
+      updated_at = excluded.updated_at`,
+  ).run(
+    workspaceId,
+    userId,
+    existing?.business_label || 'WhatsApp Business Account',
+    existing?.source_phone_number || '',
+    input.phoneNumberId.trim(),
+    input.wabaId.trim(),
+    encryptSecret(cleanToken),
+    existing?.app_secret_encrypted ?? null,
+    cleanToken.slice(0, 8),
+    existing?.forward_to_number || '',
+    existing?.extra_recipients || '',
+    existing?.keyword_filters || '',
+    0,
+    verifyToken,
+    webhookUrl,
+    existing?.webhook_relay_url || '',
+    existing?.email_forward_to || '',
+    'connected',
     existing?.created_at ?? timestamp,
     timestamp,
   );

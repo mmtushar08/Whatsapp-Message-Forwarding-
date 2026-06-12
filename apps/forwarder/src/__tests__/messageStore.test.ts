@@ -3,30 +3,22 @@ import BetterSqlite3 from 'better-sqlite3';
 // Use an in-memory SQLite database for isolation
 let testDb: BetterSqlite3.Database;
 
-jest.mock('../db/database', () => ({
-  getDatabase: () => testDb,
-  initDatabase: jest.fn(),
-}));
+jest.mock('../db/database', () => {
+  const actual = jest.requireActual('../db/database');
+  return {
+    ...actual,
+    getDatabase: () => testDb,
+    initDatabase: jest.fn(),
+  };
+});
 
 // Import after mocking
+import { applySchema } from '../db/database';
 import { getMessageLogCount, getMessageLogs, getMessageStats, logMessage } from '../db/messageStore';
-
-const SCHEMA = `
-  CREATE TABLE IF NOT EXISTS message_logs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    from_number TEXT NOT NULL,
-    to_number TEXT NOT NULL,
-    message TEXT NOT NULL,
-    type TEXT NOT NULL DEFAULT 'text',
-    status TEXT NOT NULL,
-    error TEXT,
-    forwarded_at TEXT NOT NULL
-  )
-`;
 
 beforeEach(() => {
   testDb = new BetterSqlite3(':memory:');
-  testDb.exec(SCHEMA);
+  applySchema(testDb);
 });
 
 afterEach(() => {

@@ -15,15 +15,19 @@ function requireEnv(name: string): string {
   return value;
 }
 
+function optionalEnv(name: string): string {
+  return process.env[name] ?? '';
+}
+
 const config = {
   /** WhatsApp Cloud API bearer token */
-  whatsappAccessToken: requireEnv('WHATSAPP_ACCESS_TOKEN'),
+  whatsappAccessToken: optionalEnv('WHATSAPP_ACCESS_TOKEN'),
 
   /** Phone Number ID from Meta dashboard (sender) */
-  whatsappPhoneNumberId: requireEnv('WHATSAPP_PHONE_NUMBER_ID'),
+  whatsappPhoneNumberId: optionalEnv('WHATSAPP_PHONE_NUMBER_ID'),
 
   /** The destination phone number to forward messages to (no + sign) */
-  forwardToNumber: requireEnv('FORWARD_TO_NUMBER'),
+  forwardToNumber: optionalEnv('FORWARD_TO_NUMBER'),
 
   /** Token used to verify webhook with Meta */
   webhookVerifyToken: requireEnv('WEBHOOK_VERIFY_TOKEN'),

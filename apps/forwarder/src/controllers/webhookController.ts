@@ -6,6 +6,7 @@ import {
   getWorkspaceRuntimeByVerifyToken,
   WorkspaceRuntime,
 } from '../db/workspaceStore';
+import { insertConversationMessage } from '../db/conversationStore';
 import { logMessage } from '../db/messageStore';
 import { getForwardToNumber, isForwardingEnabled } from './configController';
 import { passesFilter, passesFilterForKeywords } from '../services/filterService';
@@ -91,6 +92,19 @@ export async function receiveWebhook(req: Request, res: Response): Promise<void>
     logger.info(
       `Received message from ${senderLabel} | Type: ${message.type} | Text: "${message.text}"`,
     );
+
+    // Record every inbound message in the two-way inbox, regardless of
+    // keyword filters or forwarding state — the inbox shows the full thread.
+    if (workspace) {
+      insertConversationMessage({
+        workspaceId: workspace.id,
+        contactNumber: message.from,
+        contactName: message.senderName ?? '',
+        direction: 'in',
+        message: message.text,
+        type: message.type,
+      });
+    }
 
     const passes = workspace
       ? passesFilterForKeywords(message.text, workspace.keywordFilters)

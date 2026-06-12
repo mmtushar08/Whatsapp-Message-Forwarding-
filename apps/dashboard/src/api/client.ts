@@ -1,6 +1,7 @@
 import { clearSessionToken, getSessionToken, setSessionToken } from '../lib/session';
 import type {
   BillingStatus,
+  EmbeddedSignupCredentials,
   MessageStats,
   MarketplaceUser,
   Pagination,
@@ -63,10 +64,6 @@ async function request<T>(path: string, options: RequestInit = {}, auth = false)
   return payload as T;
 }
 
-function normalizeUser(user: MarketplaceUser): MarketplaceUser {
-  return user;
-}
-
 export async function signupAccount(
   name: string,
   email: string,
@@ -79,7 +76,7 @@ export async function signupAccount(
 
   setSessionToken(payload.sessionToken);
   return {
-    user: normalizeUser(payload.user),
+    user: payload.user,
     workspace: payload.workspace,
   };
 }
@@ -95,7 +92,7 @@ export async function loginAccount(
 
   setSessionToken(payload.sessionToken);
   return {
-    user: normalizeUser(payload.user),
+    user: payload.user,
     workspace: payload.workspace,
   };
 }
@@ -116,7 +113,7 @@ export async function getCurrentSession(): Promise<{
     );
 
     return {
-      user: normalizeUser(payload.user),
+      user: payload.user,
       workspace: payload.workspace,
     };
   } catch {
@@ -166,6 +163,25 @@ export async function saveWorkspaceRequest(
   };
 }
 
+export async function saveEmbeddedSignupCredentials(
+  input: EmbeddedSignupCredentials,
+): Promise<{ workspace: WorkspaceSetup }> {
+  const payload = await request<{ success: boolean; workspace: WorkspaceSetup }>(
+    '/api/save-credentials',
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        access_token: input.accessToken,
+        phone_number_id: input.phoneNumberId,
+        waba_id: input.wabaId,
+      }),
+    },
+    true,
+  );
+
+  return { workspace: payload.workspace };
+}
+
 export async function fetchWorkspaceMessages(
   limit = 20,
   offset = 0,
@@ -194,6 +210,85 @@ export async function fetchWorkspaceStats(): Promise<MessageStats> {
   return request<MessageStats>('/app/messages/stats', { method: 'GET' }, true);
 }
 
+export async function seedDemoData(): Promise<{ success: boolean; seeded: number }> {
+  return request<{ success: boolean; seeded: number }>('/app/demo/seed', { method: 'POST' }, true);
+}
+
+export interface ConversationSummary {
+  contactNumber: string;
+  contactName: string;
+  lastMessage: string;
+  lastDirection: 'in' | 'out';
+  lastMessageAt: string;
+  lastInboundAt: string | null;
+  messageCount: number;
+  sessionOpen: boolean;
+  sessionExpiresAt: string | null;
+}
+
+export interface ConversationMessage {
+  id: number;
+  contact_number: string;
+  contact_name: string;
+  direction: 'in' | 'out';
+  message: string;
+  type: string;
+  status: string;
+  template_name: string | null;
+  created_at: string;
+}
+
+export interface SessionInfo {
+  open: boolean;
+  expiresAt: string | null;
+}
+
+export interface MessageTemplate {
+  name: string;
+  status: 'approved' | 'in_review';
+  body: string;
+}
+
+export async function fetchConversations(): Promise<{ conversations: ConversationSummary[] }> {
+  return request<{ conversations: ConversationSummary[] }>('/app/conversations', { method: 'GET' }, true);
+}
+
+export async function fetchThread(
+  contact: string,
+): Promise<{ messages: ConversationMessage[]; session: SessionInfo }> {
+  return request<{ messages: ConversationMessage[]; session: SessionInfo }>(
+    `/app/conversations/${encodeURIComponent(contact)}/messages`,
+    { method: 'GET' },
+    true,
+  );
+}
+
+export async function sendConversationReply(
+  contact: string,
+  message: string,
+): Promise<{ message: ConversationMessage }> {
+  return request<{ message: ConversationMessage }>(
+    `/app/conversations/${encodeURIComponent(contact)}/reply`,
+    { method: 'POST', body: JSON.stringify({ message }) },
+    true,
+  );
+}
+
+export async function sendConversationTemplate(
+  contact: string,
+  templateName: string,
+): Promise<{ message: ConversationMessage }> {
+  return request<{ message: ConversationMessage }>(
+    `/app/conversations/${encodeURIComponent(contact)}/template`,
+    { method: 'POST', body: JSON.stringify({ templateName }) },
+    true,
+  );
+}
+
+export async function fetchTemplates(): Promise<{ templates: MessageTemplate[] }> {
+  return request<{ templates: MessageTemplate[] }>('/app/templates', { method: 'GET' }, true);
+}
+
 export async function fetchSmtpStatus(): Promise<{ smtpConfigured: boolean }> {
   try {
     return await request<{ smtpConfigured: boolean }>('/health/smtp', { method: 'GET' });
@@ -220,4 +315,20 @@ export async function startSubscription(plan: 'starter' | 'pro' | 'business'): P
 
 export async function cancelSubscription(): Promise<{ success: boolean }> {
   return request<{ success: boolean }>('/billing/cancel', { method: 'POST' }, true);
+}
+
+export interface PhoneOption {
+  wabaId: string;
+  wabaName: string;
+  phoneNumberId: string;
+  displayPhoneNumber: string;
+  verifiedName: string;
+}
+
+export async function fetchWabaInfo(accessToken: string): Promise<{ phones: PhoneOption[] }> {
+  return request<{ phones: PhoneOption[] }>(
+    '/api/fetch-waba-info',
+    { method: 'POST', body: JSON.stringify({ access_token: accessToken }) },
+    true,
+  );
 }

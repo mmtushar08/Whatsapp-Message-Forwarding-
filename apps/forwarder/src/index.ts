@@ -6,6 +6,7 @@ import { getDatabase, initDatabase } from './db/database';
 import { isEmailConfigured } from './services/emailService';
 import logger from './services/loggerService';
 import { requestIdMiddleware } from './middleware/requestId';
+import apiRouter from './routes/api';
 import appRouter from './routes/app';
 import authRouter from './routes/auth';
 import billingRouter from './routes/billing';
@@ -17,6 +18,14 @@ import webhookRouter from './routes/webhook';
 const app = express();
 const publicDir = path.resolve(__dirname, 'public');
 const corsOrigin = process.env['CORS_ORIGIN'] ?? '*';
+
+// Behind a reverse proxy (Render, Railway, nginx) the client IP arrives in
+// X-Forwarded-For; without this, express-rate-limit rejects every request.
+// Set TRUST_PROXY=0 when running with no proxy in front.
+const trustProxy = parseInt(process.env['TRUST_PROXY'] ?? '1', 10);
+if (trustProxy > 0) {
+  app.set('trust proxy', trustProxy);
+}
 
 if (corsOrigin === '*') {
   if (process.env['NODE_ENV'] === 'production') {
@@ -64,6 +73,7 @@ app.get('/', (_req, res) => {
 });
 
 app.use('/webhook', webhookRouter);
+app.use('/api', apiRouter);
 app.use('/auth', authRouter);
 app.use('/app', appRouter);
 app.use('/billing', billingRouter);

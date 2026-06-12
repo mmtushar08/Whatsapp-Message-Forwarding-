@@ -1,5 +1,28 @@
+import BetterSqlite3 from 'better-sqlite3';
 import request from 'supertest';
+
+let testDb: BetterSqlite3.Database;
+
+jest.mock('../db/database', () => {
+  const actual = jest.requireActual('../db/database');
+  return {
+    ...actual,
+    getDatabase: () => testDb,
+    initDatabase: jest.fn(),
+  };
+});
+
 import app from '../index';
+import { applySchema } from '../db/database';
+
+beforeEach(() => {
+  testDb = new BetterSqlite3(':memory:');
+  applySchema(testDb);
+});
+
+afterEach(() => {
+  testDb.close();
+});
 
 describe('webhookController', () => {
   describe('GET /webhook — verifyWebhook', () => {

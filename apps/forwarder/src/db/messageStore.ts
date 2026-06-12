@@ -20,6 +20,8 @@ export interface MessageLogInput {
   type?: string;
   status: 'success' | 'failed';
   error?: string;
+  /** ISO timestamp override; defaults to now. Used by the dev demo seeder. */
+  forwarded_at?: string;
 }
 
 /**
@@ -38,7 +40,7 @@ export function logMessage(input: MessageLogInput): void {
     input.type ?? 'text',
     input.status,
     input.error ?? null,
-    new Date().toISOString(),
+    input.forwarded_at ?? new Date().toISOString(),
   );
 }
 

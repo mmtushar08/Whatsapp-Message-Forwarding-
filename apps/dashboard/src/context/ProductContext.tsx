@@ -12,6 +12,7 @@ import {
   getCurrentSession,
   loginAccount,
   logoutAccount,
+  saveEmbeddedSignupCredentials,
   saveWorkspaceRequest,
   signupAccount,
 } from '../api/client';
@@ -22,6 +23,7 @@ import type {
   PrototypeMessageLog,
   WorkspaceSetup,
   WorkspaceSettingsInput,
+  EmbeddedSignupCredentials,
 } from '../types';
 
 interface ProductContextValue {
@@ -43,6 +45,9 @@ interface ProductContextValue {
   logout: () => Promise<void>;
   saveWorkspace: (
     input: WorkspaceSettingsInput,
+  ) => Promise<{ ok: true } | { ok: false; error: string }>;
+  saveEmbeddedSignup: (
+    input: EmbeddedSignupCredentials,
   ) => Promise<{ ok: true } | { ok: false; error: string }>;
   refreshWorkspaceData: () => Promise<void>;
 }
@@ -142,6 +147,18 @@ export function ProductProvider({ children }: { children: ReactNode }) {
           const result = await saveWorkspaceRequest(input);
           setWorkspace(result.workspace);
           await loadWorkspaceData();
+          return { ok: true };
+        } catch (error) {
+          return { ok: false, error: (error as Error).message };
+        }
+      },
+      async saveEmbeddedSignup(input) {
+        try {
+          const result = await saveEmbeddedSignupCredentials(input);
+          setWorkspace(result.workspace);
+          setMessages([]);
+          setPagination(null);
+          setStats({ total: 0, success: 0, failed: 0 });
           return { ok: true };
         } catch (error) {
           return { ok: false, error: (error as Error).message };

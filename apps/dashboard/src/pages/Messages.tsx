@@ -1,74 +1,107 @@
+import { useState } from 'react';
+import { seedDemoData } from '../api/client';
 import { useProduct } from '../context/ProductContext';
 
+type BadgeColor = 'green' | 'red';
+const BADGE: Record<BadgeColor, { bg: string; color: string }> = {
+  green: { bg: '#E4F6EC', color: '#11713E' },
+  red:   { bg: '#FBE3E2', color: '#A03330' },
+};
+
 export default function Messages() {
-  const { messages, pagination, refreshWorkspaceData } = useProduct();
+  const { workspace, messages, pagination, refreshWorkspaceData } = useProduct();
+  const [seeding, setSeeding] = useState(false);
+
+  async function handleSeed() {
+    setSeeding(true);
+    try {
+      await seedDemoData();
+      await refreshWorkspaceData();
+    } finally {
+      setSeeding(false);
+    }
+  }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <p className="font-mono text-xs uppercase tracking-[0.25em] text-emerald-700">Logs</p>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight text-stone-900">Forwarding activity</h1>
-        <p className="mt-2 text-sm text-stone-600">
-          These logs now come from the workspace-scoped backend message store.
-        </p>
-      </div>
-
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-stone-600">
-          {pagination ? `Total logged messages: ${pagination.total}` : 'Workspace log feed'}
-        </p>
+    <div className="max-w-5xl space-y-6">
+      <div className="flex justify-between items-start gap-4 flex-wrap">
+        <div>
+          <h1 className="text-[23px] font-bold tracking-tight" style={{ color: '#14201B' }}>Message logs</h1>
+          <p className="text-sm" style={{ color: '#5C6B63' }}>
+            Every inbound message and where it went.{pagination ? ` Total: ${pagination.total}` : ''}
+          </p>
+        </div>
         <button
           type="button"
-          onClick={() => {
-            void refreshWorkspaceData();
-          }}
-          className="rounded-full border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-900"
+          onClick={() => void refreshWorkspaceData()}
+          className="rounded-[11px] px-4 py-2 text-sm font-semibold border"
+          style={{ borderColor: '#DCE4DF', color: '#14201B' }}
         >
           Refresh logs
         </button>
       </div>
 
       {messages.length === 0 ? (
-        <div className="rounded-[2rem] border border-stone-200 bg-white p-8 text-sm text-stone-600 shadow-sm">
-          No logged messages yet for this workspace.
+        <div className="bg-white rounded-[14px] p-10 text-center" style={{ border: '1px solid #DCE4DF', boxShadow: '0 8px 30px rgba(14,59,46,.10)' }}>
+          <p className="text-sm mb-4" style={{ color: '#5C6B63' }}>
+            {workspace
+              ? 'No logged messages yet for this workspace. Send a WhatsApp message to your business number to see it here.'
+              : 'Connect WhatsApp to start logging forwarded messages.'}
+          </p>
+          {workspace && import.meta.env.DEV && (
+            <button
+              type="button"
+              disabled={seeding}
+              onClick={handleSeed}
+              className="rounded-[9px] px-4 py-2 text-sm font-semibold border disabled:opacity-50"
+              style={{ borderColor: '#1FAB5E', color: '#168B4B' }}
+            >
+              {seeding ? 'Seeding…' : 'Seed demo data (dev only)'}
+            </button>
+          )}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-[2rem] border border-stone-200 bg-white shadow-sm">
-        <table className="min-w-full divide-y divide-stone-200">
-          <thead className="bg-stone-50">
-            <tr className="text-left text-xs uppercase tracking-[0.2em] text-stone-500">
-              <th className="px-6 py-4">Status</th>
-              <th className="px-6 py-4">From</th>
-              <th className="px-6 py-4">To</th>
-              <th className="px-6 py-4">Message</th>
-              <th className="px-6 py-4">Time</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-stone-100">
-            {messages.map((message) => (
-              <tr key={message.id} className="text-sm text-stone-700">
-                <td className="px-6 py-4">
-                  <span
-                    className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                      message.status === 'success'
-                        ? 'bg-emerald-100 text-emerald-700'
-                        : 'bg-rose-100 text-rose-700'
-                    }`}
-                  >
-                    {message.status}
-                  </span>
-                </td>
-                <td className="px-6 py-4">{message.from}</td>
-                <td className="px-6 py-4">{message.to}</td>
-                <td className="px-6 py-4">
-                  <div>{message.message}</div>
-                  {message.error ? <div className="mt-1 text-xs text-rose-600">{message.error}</div> : null}
-                </td>
-                <td className="px-6 py-4">{new Date(message.forwardedAt).toLocaleString()}</td>
+        <div className="bg-white rounded-[14px] overflow-auto" style={{ border: '1px solid #DCE4DF', boxShadow: '0 8px 30px rgba(14,59,46,.10)' }}>
+          <table className="w-full border-collapse text-[13.5px]">
+            <thead>
+              <tr>
+                {['Time', 'From', 'To', 'Message', 'Status'].map((h) => (
+                  <th key={h} className="font-mono text-[10.5px] uppercase tracking-[0.12em] text-left px-4 py-3"
+                    style={{ color: '#5C6B63', borderBottom: '1.5px solid #DCE4DF' }}>
+                    {h}
+                  </th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {messages.map((row) => {
+                const ok = row.status === 'success';
+                const badge = BADGE[ok ? 'green' : 'red'];
+                return (
+                  <tr key={row.id} className="hover:bg-[#FAFCFA]">
+                    <td className="font-mono px-4 py-3 whitespace-nowrap" style={{ color: '#14201B', borderBottom: '1px solid #EDF1EE' }}>
+                      {new Date(row.forwardedAt).toLocaleString()}
+                    </td>
+                    <td className="font-mono px-4 py-3 whitespace-nowrap" style={{ color: '#5C6B63', borderBottom: '1px solid #EDF1EE' }}>
+                      +{row.from}
+                    </td>
+                    <td className="font-mono px-4 py-3 whitespace-nowrap" style={{ color: '#5C6B63', borderBottom: '1px solid #EDF1EE' }}>
+                      +{row.to}
+                    </td>
+                    <td className="px-4 py-3 max-w-[260px]" style={{ color: '#14201B', borderBottom: '1px solid #EDF1EE' }}>
+                      <div className="truncate">{row.message}</div>
+                      {row.error && <div className="mt-1 text-xs" style={{ color: '#A03330' }}>{row.error}</div>}
+                    </td>
+                    <td className="px-4 py-3" style={{ borderBottom: '1px solid #EDF1EE' }}>
+                      <span className="inline-flex items-center rounded-full px-3 py-0.5 text-[11.5px] font-bold" style={badge}>
+                        {ok ? 'Delivered' : 'Failed'}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

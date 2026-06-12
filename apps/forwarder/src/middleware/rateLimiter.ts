@@ -1,5 +1,9 @@
 import rateLimit from 'express-rate-limit';
 
+// Rate limits protect production traffic; under jest they only make tests
+// order-dependent, so they are skipped entirely.
+const isTestEnv = (): boolean => process.env['NODE_ENV'] === 'test';
+
 /**
  * Rate limiter for the webhook endpoint.
  * Meta sends many webhooks quickly during high traffic — allow generous limit.
@@ -11,7 +15,7 @@ export const webhookRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' },
-  skip: (req) => req.method === 'GET', // Don't rate limit webhook verification
+  skip: (req) => isTestEnv() || req.method === 'GET', // Don't rate limit webhook verification
 });
 
 /**
@@ -25,6 +29,22 @@ export const configRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many config update requests, please try again later.' },
+  skip: isTestEnv,
+});
+
+/**
+ * Rate limiter for session-authenticated app/API routes.
+ * The dashboard SPA fires several requests per page view, so this is far
+ * more generous than the admin config limiter.
+ * 120 requests per minute per IP.
+ */
+export const appApiRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please slow down.' },
+  skip: isTestEnv,
 });
 
 export const authRateLimiter = rateLimit({
@@ -33,6 +53,7 @@ export const authRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many authentication requests, please try again later.' },
+  skip: isTestEnv,
 });
 
 /**
@@ -45,4 +66,5 @@ export const signupRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many signup attempts, please try again later.' },
+  skip: isTestEnv,
 });

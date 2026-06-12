@@ -23,6 +23,14 @@ export function initDatabase(): void {
   // Enable WAL mode for better performance
   db.pragma('journal_mode = WAL');
 
+  applySchema(db);
+}
+
+/**
+ * Creates all tables and runs column migrations on the given connection.
+ * Exported so tests can build an identical schema on an in-memory database.
+ */
+export function applySchema(db: BetterSqlite3.Database): void {
   // Create config table
   db.exec(`
     CREATE TABLE IF NOT EXISTS config (
@@ -92,6 +100,7 @@ export function initDatabase(): void {
       business_label TEXT NOT NULL,
       source_phone_number TEXT NOT NULL,
       phone_number_id TEXT NOT NULL,
+      waba_id TEXT NOT NULL DEFAULT '',
       access_token_encrypted TEXT NOT NULL,
       app_secret_encrypted TEXT,
       access_token_preview TEXT NOT NULL,
@@ -107,6 +116,26 @@ export function initDatabase(): void {
     )
   `);
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS conversation_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      workspace_id TEXT NOT NULL,
+      contact_number TEXT NOT NULL,
+      contact_name TEXT NOT NULL DEFAULT '',
+      direction TEXT NOT NULL CHECK(direction IN ('in', 'out')),
+      message TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'text',
+      status TEXT NOT NULL DEFAULT 'received',
+      template_name TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY(workspace_id) REFERENCES workspaces(id)
+    )
+  `);
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_conversation_messages_lookup
+    ON conversation_messages(workspace_id, contact_number, created_at)
+  `);
+
   const messageLogColumns = db
     .prepare(`PRAGMA table_info(message_logs)`)
     .all() as Array<{ name: string }>;
@@ -118,6 +147,9 @@ export function initDatabase(): void {
   const workspaceColumns = db.prepare(`PRAGMA table_info(workspaces)`).all() as Array<{ name: string }>;
   if (!workspaceColumns.some((c) => c.name === 'app_secret_encrypted')) {
     db.exec(`ALTER TABLE workspaces ADD COLUMN app_secret_encrypted TEXT`);
+  }
+  if (!workspaceColumns.some((c) => c.name === 'waba_id')) {
+    db.exec(`ALTER TABLE workspaces ADD COLUMN waba_id TEXT NOT NULL DEFAULT ''`);
   }
   if (!workspaceColumns.some((c) => c.name === 'extra_recipients')) {
     db.exec(`ALTER TABLE workspaces ADD COLUMN extra_recipients TEXT NOT NULL DEFAULT ''`);
