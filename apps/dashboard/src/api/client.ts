@@ -64,6 +64,30 @@ async function request<T>(path: string, options: RequestInit = {}, auth = false)
   return payload as T;
 }
 
+export async function metaLoginAccount(params: {
+  name: string;
+  accessToken: string;
+  phoneNumberId: string;
+  wabaId: string;
+}): Promise<{ user: MarketplaceUser; workspace: WorkspaceSetup | null; isNewUser: boolean }> {
+  const payload = await request<AuthPayload & { isNewUser: boolean }>('/auth/meta-login', {
+    method: 'POST',
+    body: JSON.stringify({
+      name: params.name,
+      access_token: params.accessToken,
+      phone_number_id: params.phoneNumberId,
+      waba_id: params.wabaId,
+    }),
+  });
+
+  setSessionToken(payload.sessionToken);
+  return {
+    user: payload.user,
+    workspace: payload.workspace,
+    isNewUser: payload.isNewUser,
+  };
+}
+
 export async function signupAccount(
   name: string,
   email: string,

@@ -12,6 +12,7 @@ import {
   getCurrentSession,
   loginAccount,
   logoutAccount,
+  metaLoginAccount,
   saveEmbeddedSignupCredentials,
   saveWorkspaceRequest,
   signupAccount,
@@ -42,6 +43,12 @@ interface ProductContextValue {
     email: string,
     password: string,
   ) => Promise<{ ok: true } | { ok: false; error: string }>;
+  metaLogin: (params: {
+    name: string;
+    accessToken: string;
+    phoneNumberId: string;
+    wabaId: string;
+  }) => Promise<{ ok: true; isNewUser: boolean } | { ok: false; error: string }>;
   logout: () => Promise<void>;
   saveWorkspace: (
     input: WorkspaceSettingsInput,
@@ -130,6 +137,23 @@ export function ProductProvider({ children }: { children: ReactNode }) {
             setStats({ total: 0, success: 0, failed: 0 });
           }
           return { ok: true };
+        } catch (error) {
+          return { ok: false, error: (error as Error).message };
+        }
+      },
+      async metaLogin(params) {
+        try {
+          const result = await metaLoginAccount(params);
+          setCurrentUser(result.user);
+          setWorkspace(result.workspace);
+          if (result.workspace) {
+            await loadWorkspaceData();
+          } else {
+            setMessages([]);
+            setPagination(null);
+            setStats({ total: 0, success: 0, failed: 0 });
+          }
+          return { ok: true, isNewUser: result.isNewUser };
         } catch (error) {
           return { ok: false, error: (error as Error).message };
         }
