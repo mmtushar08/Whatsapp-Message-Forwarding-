@@ -44,7 +44,6 @@ interface ProductContextValue {
     password: string,
   ) => Promise<{ ok: true } | { ok: false; error: string }>;
   metaLogin: (params: {
-    name: string;
     accessToken: string;
     phoneNumberId: string;
     wabaId: string;

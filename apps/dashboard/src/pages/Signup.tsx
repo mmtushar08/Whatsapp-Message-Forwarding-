@@ -23,7 +23,6 @@ export default function Signup() {
   }
 
   async function handleMetaComplete(params: {
-    name: string;
     accessToken: string;
     phoneNumberId: string;
     wabaId: string;

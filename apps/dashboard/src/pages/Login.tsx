@@ -22,7 +22,6 @@ export default function Login() {
   }
 
   async function handleMetaComplete(params: {
-    name: string;
     accessToken: string;
     phoneNumberId: string;
     wabaId: string;
