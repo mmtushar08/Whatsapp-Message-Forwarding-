@@ -24,13 +24,8 @@ function sanitizeUser(user: {
   };
 }
 
-// ─── AFTER META APP APPROVAL ──────────────────────────────────────────────────
-// This endpoint handles both signup and login via Meta Embedded Login.
-// Currently used with simulated (demo) tokens from MetaLoginModal.tsx.
-//
-// After approval, the frontend MetaLoginModal will send REAL tokens from FB.login().
-// This backend endpoint needs NO changes — it already handles real phone_number_ids.
-// ─────────────────────────────────────────────────────────────────────────────
+// Handles both signup and login via Meta Embedded Login (FB.login() popup).
+// Frontend sends real access_token + phone_number_id + waba_id from Meta postMessage.
 
 export function metaLogin(req: Request, res: Response): void {
   const { name, access_token, phone_number_id, waba_id } = req.body as {
@@ -56,11 +51,6 @@ export function metaLogin(req: Request, res: Response): void {
     userId = existingRuntime.userId;
   } else {
     // New user — create account
-    if (!name || !name.trim()) {
-      res.status(400).json({ error: 'name is required for new accounts' });
-      return;
-    }
-
     // Synthetic internal email — never used for email/password login
     const internalEmail = `meta_${phone_number_id.replace(/\W/g, '_')}@sendro.internal`;
     if (getUserByEmail(internalEmail)) {
@@ -71,7 +61,7 @@ export function metaLogin(req: Request, res: Response): void {
     const timestamp = new Date().toISOString();
     const newUser = {
       id: createId('user'),
-      name: name.trim(),
+      name: (name && name.trim()) || 'Business Owner',
       email: internalEmail,
       password_hash: hashPassword(createId('tmp')), // random — Meta users never use email/password
       created_at: timestamp,

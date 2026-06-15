@@ -9,15 +9,6 @@ interface EmbeddedSignupMessage {
   event?: 'FINISH' | 'CANCEL' | 'ERROR';
   data?: { phone_number_id?: string; waba_id?: string };
 }
-declare global {
-  interface Window {
-    fbAsyncInit?: () => void;
-    FB?: {
-      init: (o: { appId: string; version: string; xfbml?: boolean; cookie?: boolean }) => void;
-      login: (cb: (r: { authResponse?: { accessToken?: string } }) => void, o: object) => void;
-    };
-  }
-}
 
 const META_APP_ID = import.meta.env.VITE_META_APP_ID as string | undefined;
 
