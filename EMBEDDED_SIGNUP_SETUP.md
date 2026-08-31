@@ -1,8 +1,6 @@
 # WhatsApp Embedded Signup Setup
 
-This build keeps onboarding focused on one job: connect a WhatsApp Business Account with Meta Embedded Signup and store the returned credentials.
-
-It does not add webhook handling, message sending, chatbot logic, automation, or forwarding rules.
+This build uses Meta's real Embedded Signup flow for Sendo.cloud. The browser receives the short-lived authorization code plus WABA/phone identifiers; the code is immediately sent to the backend and exchanged with Meta using the app secret. The business token is never exposed to the browser.
 
 ## Folder Structure
 
@@ -10,11 +8,12 @@ It does not add webhook handling, message sending, chatbot logic, automation, or
 apps/
   dashboard/
     src/pages/Onboarding.tsx
-    src/pages/Dashboard.tsx
     src/api/client.ts
+    src/types/facebook.d.ts
     .env.example
   forwarder/
     src/controllers/embeddedSignupController.ts
+    src/services/metaEmbeddedSignupService.ts
     src/routes/api.ts
     src/db/workspaceStore.ts
     .env.example
@@ -28,7 +27,7 @@ cp .env.example .env
 npm run dev -- --host 0.0.0.0 --port 4173
 ```
 
-Set these values in `apps/dashboard/.env`:
+Set:
 
 ```text
 VITE_API_BASE_URL=http://localhost:3000
@@ -36,7 +35,19 @@ VITE_META_APP_ID=your_meta_app_id
 VITE_META_CONFIG_ID=your_embedded_signup_config_id
 ```
 
+Never put `META_APP_SECRET` in the dashboard environment or any `VITE_*` variable.
+
 ## Backend Setup
+
+Set these server-only variables:
+
+```text
+META_APP_ID=your_meta_app_id
+META_APP_SECRET=your_meta_app_secret
+META_GRAPH_API_VERSION=v22.0
+```
+
+Then:
 
 ```bash
 cd apps/forwarder
@@ -45,52 +56,83 @@ npm run build
 npm start
 ```
 
-The backend exposes:
+## API
+
+Production onboarding uses:
 
 ```text
-POST /api/save-credentials
+POST /api/complete-embedded-signup
+Authorization: Bearer <Sendo session token>
 ```
 
-Request body:
+Request:
 
 ```json
 {
-  "access_token": "...",
-  "phone_number_id": "...",
-  "waba_id": "..."
+  "code": "META_EXCHANGEABLE_CODE",
+  "phone_number_id": "123456789",
+  "waba_id": "987654321",
+  "business_id": "optional_business_id"
 }
 ```
 
-Response:
+The server:
 
-```json
-{
-  "success": true,
-  "workspace": {}
-}
-```
+1. Exchanges the authorization code at Meta's `/oauth/access_token` endpoint.
+2. Receives the customer-scoped business token.
+3. Subscribes the app to the customer's WABA at `/{waba_id}/subscribed_apps`.
+4. Encrypts the business token and stores it against the authenticated Sendo workspace.
 
-## Meta Setup
+The old `POST /api/save-credentials` endpoint remains only for manual/test imports.
 
-1. Open Meta for Developers.
-2. Create or open a Business app.
-3. Add the WhatsApp product.
-4. Copy the App ID into `VITE_META_APP_ID`.
-5. In WhatsApp Embedded Signup, create a configuration.
-6. Copy that configuration ID into `VITE_META_CONFIG_ID`.
-7. Add your local or production domain to the allowed JavaScript SDK domains.
-8. Make sure the app has these permissions available:
+## Meta App Configuration
+
+1. Use the Meta app approved for your Tech Provider integration.
+2. Enable Facebook Login for Business.
+3. Create/use a WhatsApp Embedded Signup configuration and copy its Config ID.
+4. Enable Login with the JavaScript SDK, Web OAuth Login, Client OAuth Login, Embedded Browser OAuth Login, Strict Mode for redirect URIs, and HTTPS as required by your Meta configuration.
+5. Add every actual Sendo.cloud dashboard hostname used for onboarding to Meta's allowed domains and exact OAuth redirect configuration.
+6. Make sure the configuration has the required WhatsApp permissions, including:
 
 ```text
 whatsapp_business_management
 whatsapp_business_messaging
 ```
 
+Use Advanced Access where Meta requires it for real customer onboarding.
+
 ## Flow
 
-1. User clicks `Connect WhatsApp`.
-2. The frontend loads the official Facebook JavaScript SDK.
-3. The frontend calls `FB.login()` with the Embedded Signup configuration ID.
-4. The frontend listens for Meta `postMessage` events.
-5. On `FINISH`, it saves `access_token`, `phone_number_id`, and `waba_id`.
-6. The app shows `WhatsApp Connected Successfully`.
+```text
+Customer clicks Connect with Meta
+        ↓
+FB.login(config_id, response_type=code)
+        ↓
+Meta Embedded Signup popup
+        ↓
+WA_EMBEDDED_SIGNUP FINISH postMessage
+        ↓
+WABA ID + phone number ID
+        ↓
+FB.login callback → exchangeable code
+        ↓
+POST /api/complete-embedded-signup
+        ↓
+Backend exchanges code using META_APP_SECRET
+        ↓
+Customer business token
+        ↓
+Subscribe app to WABA
+        ↓
+Encrypt + store token in workspace
+```
+
+The `postMessage` and `FB.login` callback can arrive in either order, so the dashboard waits until it has both the code and the WABA/phone IDs before completing onboarding.
+
+## Important Production Notes
+
+- Do not log the authorization code or business token.
+- Exchange the code immediately because it is short-lived.
+- Keep the business token server-side and encrypted at rest.
+- Test with a Meta account that is not an administrator/developer of the app before production launch.
+- Confirm your app's webhook subscription and WABA event handling before enabling customer messaging.
