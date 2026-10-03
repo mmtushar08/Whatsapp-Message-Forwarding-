@@ -143,6 +143,19 @@ export function applySchema(db: BetterSqlite3.Database): void {
   if (!messageLogColumns.some((column) => column.name === 'workspace_id')) {
     db.exec(`ALTER TABLE message_logs ADD COLUMN workspace_id TEXT`);
   }
+  // 'whatsapp' | 'email' | 'webhook' — which destination a log row describes
+  if (!messageLogColumns.some((column) => column.name === 'channel')) {
+    db.exec(`ALTER TABLE message_logs ADD COLUMN channel TEXT NOT NULL DEFAULT 'whatsapp'`);
+  }
+
+  // Meta retries and occasionally duplicates webhook deliveries; remembering
+  // processed message IDs keeps a message from being forwarded twice.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS processed_webhook_messages (
+      message_id TEXT PRIMARY KEY,
+      received_at TEXT NOT NULL
+    )
+  `);
 
   const workspaceColumns = db.prepare(`PRAGMA table_info(workspaces)`).all() as Array<{
     name: string;
@@ -162,6 +175,29 @@ export function applySchema(db: BetterSqlite3.Database): void {
   if (!workspaceColumns.some((c) => c.name === 'email_forward_to')) {
     db.exec(`ALTER TABLE workspaces ADD COLUMN email_forward_to TEXT NOT NULL DEFAULT ''`);
   }
+  // 'embedded_signup' (webhooks managed by the platform app) or 'manual'
+  // (customer's own app — they point its webhook at us themselves)
+  if (!workspaceColumns.some((c) => c.name === 'connection_method')) {
+    db.exec(`ALTER TABLE workspaces ADD COLUMN connection_method TEXT NOT NULL DEFAULT 'manual'`);
+  }
+  if (!workspaceColumns.some((c) => c.name === 'last_webhook_at')) {
+    db.exec(`ALTER TABLE workspaces ADD COLUMN last_webhook_at TEXT NOT NULL DEFAULT ''`);
+  }
+  if (!workspaceColumns.some((c) => c.name === 'forward_template_name')) {
+    db.exec(`ALTER TABLE workspaces ADD COLUMN forward_template_name TEXT NOT NULL DEFAULT ''`);
+  }
+  if (!workspaceColumns.some((c) => c.name === 'forward_template_language')) {
+    db.exec(
+      `ALTER TABLE workspaces ADD COLUMN forward_template_language TEXT NOT NULL DEFAULT 'en'`,
+    );
+  }
+  if (!workspaceColumns.some((c) => c.name === 'two_step_pin_encrypted')) {
+    db.exec(`ALTER TABLE workspaces ADD COLUMN two_step_pin_encrypted TEXT`);
+  }
+  if (!workspaceColumns.some((c) => c.name === 'setup_warnings')) {
+    db.exec(`ALTER TABLE workspaces ADD COLUMN setup_warnings TEXT NOT NULL DEFAULT ''`);
+  }
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_workspaces_phone ON workspaces(phone_number_id)`);
 
   const userColumns = db.prepare(`PRAGMA table_info(users)`).all() as Array<{ name: string }>;
   if (!userColumns.some((c) => c.name === 'plan')) {

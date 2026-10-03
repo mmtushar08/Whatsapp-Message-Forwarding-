@@ -49,6 +49,7 @@ export function getLimits(plan: PlanTier): PlanLimits {
 }
 
 export interface FeatureCheckInput {
+  forwardToNumber: string;
   extraRecipients: string[];
   webhookRelayUrl: string;
   emailForwardTo: string;
@@ -66,7 +67,7 @@ export function validatePlanFeatures(
 ): FeatureCheckError | null {
   const limits = getLimits(plan);
 
-  const totalDestinations = 1 + input.extraRecipients.length;
+  const totalDestinations = (input.forwardToNumber ? 1 : 0) + input.extraRecipients.length;
   if (totalDestinations > limits.maxDestinations) {
     return {
       field: 'extraRecipients',

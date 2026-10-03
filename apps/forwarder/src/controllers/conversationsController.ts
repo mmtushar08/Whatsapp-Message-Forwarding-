@@ -6,41 +6,41 @@ import {
   getLastInboundAt,
   insertConversationMessage,
 } from '../db/conversationStore';
-import { getWorkspaceByUserId, getWorkspaceRuntimeByPhoneNumberId } from '../db/workspaceStore';
-import { sendTextMessage } from '../services/whatsappService';
-import logger from '../services/loggerService';
+import { getWorkspaceRuntimeByUserId, WorkspaceRuntime } from '../db/workspaceStore';
+import { listMessageTemplates, MessageTemplate } from '../services/metaGraphService';
+import { sendTemplateMessage, sendTextMessage } from '../services/whatsappService';
 
-/**
- * Static template catalog for now. A production version would sync these from
- * the Graph API message_templates edge once the WABA has approved templates.
- */
-const TEMPLATES = [
-  {
-    name: 'follow_up_v2',
-    status: 'approved',
-    body: 'Hi {{1}}, following up on your enquiry about {{2}}. Are you still interested? Reply YES to continue.',
-  },
-  {
-    name: 'site_visit_slot',
-    status: 'approved',
-    body: "Hi {{1}}, slots for a site visit are open this weekend. Reply with a preferred time and we'll confirm.",
-  },
-  {
-    name: 'payment_reminder',
-    status: 'in_review',
-    body: 'Hi {{1}}, a gentle reminder about your pending booking amount of {{2}}.',
-  },
-];
+type TemplateStatus = 'approved' | 'in_review' | 'rejected' | 'paused' | 'disabled';
 
-function resolveWorkspace(req: Request): { id: string } | null {
+/** Meta reports APPROVED / PENDING / REJECTED / PAUSED / DISABLED / IN_APPEAL. */
+function normalizeTemplateStatus(status: string): TemplateStatus {
+  switch (status.toUpperCase()) {
+    case 'APPROVED':
+      return 'approved';
+    case 'REJECTED':
+      return 'rejected';
+    case 'PAUSED':
+      return 'paused';
+    case 'DISABLED':
+      return 'disabled';
+    default:
+      return 'in_review';
+  }
+}
+
+function resolveWorkspace(req: Request): WorkspaceRuntime | null {
   if (!req.auth) return null;
-  return getWorkspaceByUserId(req.auth.userId);
+  return getWorkspaceRuntimeByUserId(req.auth.userId);
+}
+
+function sendWorkspaceNotFound(res: Response): void {
+  res.status(404).json({ error: 'Workspace not found', onboardingRequired: true });
 }
 
 export function listConversations(req: Request, res: Response): void {
   const workspace = resolveWorkspace(req);
   if (!workspace) {
-    res.status(404).json({ error: 'Workspace not found', onboardingRequired: true });
+    sendWorkspaceNotFound(res);
     return;
   }
   res.status(200).json({ conversations: getConversations(workspace.id) });
@@ -49,7 +49,7 @@ export function listConversations(req: Request, res: Response): void {
 export function getThread(req: Request, res: Response): void {
   const workspace = resolveWorkspace(req);
   if (!workspace) {
-    res.status(404).json({ error: 'Workspace not found', onboardingRequired: true });
+    sendWorkspaceNotFound(res);
     return;
   }
 
@@ -64,47 +64,44 @@ export function getThread(req: Request, res: Response): void {
   res.status(200).json({ messages, session });
 }
 
-export function listTemplates(_req: Request, res: Response): void {
-  res.status(200).json({ templates: TEMPLATES });
+async function loadTemplates(workspace: WorkspaceRuntime): Promise<MessageTemplate[]> {
+  if (!workspace.wabaId) {
+    throw new Error(
+      'Templates need your WhatsApp Business Account. Reconnect WhatsApp from the Numbers page to load them.',
+    );
+  }
+  return listMessageTemplates(workspace.wabaId, workspace.accessToken);
 }
 
-async function deliverOutbound(
-  userId: string,
-  contact: string,
-  text: string,
-): Promise<'sent' | 'simulated'> {
-  const workspaceView = getWorkspaceByUserId(userId);
-  const runtime = workspaceView
-    ? getWorkspaceRuntimeByPhoneNumberId(workspaceView.phoneNumberId)
-    : null;
-
-  if (!runtime) {
-    throw new Error('Workspace credentials not found');
+/** GET /app/templates — the WABA's real templates, straight from Meta. */
+export async function listTemplates(req: Request, res: Response): Promise<void> {
+  const workspace = resolveWorkspace(req);
+  if (!workspace) {
+    sendWorkspaceNotFound(res);
+    return;
   }
 
   try {
-    await sendTextMessage(contact, text, {
-      accessToken: runtime.accessToken,
-      phoneNumberId: runtime.phoneNumberId,
+    const templates = await loadTemplates(workspace);
+    res.status(200).json({
+      templates: templates.map((template) => ({
+        name: template.name,
+        language: template.language,
+        category: template.category,
+        status: normalizeTemplateStatus(template.status),
+        body: template.body,
+        variableCount: template.variableCount,
+      })),
     });
-    return 'sent';
   } catch (error) {
-    // Demo/test credentials can't reach the Graph API. Outside production we
-    // record the message as simulated so the product flow stays usable.
-    if (process.env['NODE_ENV'] !== 'production') {
-      logger.warn(
-        `Cloud API send failed in dev — storing as simulated: ${(error as Error).message}`,
-      );
-      return 'simulated';
-    }
-    throw error;
+    res.status(502).json({ error: (error as Error).message, templates: [] });
   }
 }
 
 export async function postReply(req: Request, res: Response): Promise<void> {
   const workspace = resolveWorkspace(req);
-  if (!workspace || !req.auth) {
-    res.status(404).json({ error: 'Workspace not found', onboardingRequired: true });
+  if (!workspace) {
+    sendWorkspaceNotFound(res);
     return;
   }
 
@@ -127,13 +124,16 @@ export async function postReply(req: Request, res: Response): Promise<void> {
   }
 
   try {
-    const status = await deliverOutbound(req.auth.userId, contact, message.trim());
+    await sendTextMessage(contact, message.trim(), {
+      accessToken: workspace.accessToken,
+      phoneNumberId: workspace.phoneNumberId,
+    });
     const stored = insertConversationMessage({
       workspaceId: workspace.id,
       contactNumber: contact,
       direction: 'out',
       message: message.trim(),
-      status,
+      status: 'sent',
     });
     res.status(201).json({ message: stored, session });
   } catch (error) {
@@ -143,33 +143,69 @@ export async function postReply(req: Request, res: Response): Promise<void> {
 
 export async function postTemplate(req: Request, res: Response): Promise<void> {
   const workspace = resolveWorkspace(req);
-  if (!workspace || !req.auth) {
-    res.status(404).json({ error: 'Workspace not found', onboardingRequired: true });
+  if (!workspace) {
+    sendWorkspaceNotFound(res);
     return;
   }
 
   const contact = req.params['contact'];
-  const { templateName } = req.body as { templateName?: string };
-  const template = TEMPLATES.find((t) => t.name === templateName);
+  const { templateName, language, parameters } = req.body as {
+    templateName?: string;
+    language?: string;
+    parameters?: unknown;
+  };
 
-  if (!contact || !template) {
-    res.status(400).json({ error: 'contact and a valid templateName are required' });
+  if (!contact || !templateName) {
+    res.status(400).json({ error: 'contact and templateName are required' });
     return;
   }
-  if (template.status !== 'approved') {
+
+  let templates: MessageTemplate[];
+  try {
+    templates = await loadTemplates(workspace);
+  } catch (error) {
+    res.status(502).json({ error: (error as Error).message });
+    return;
+  }
+
+  const template = templates.find(
+    (t) => t.name === templateName && (!language || t.language === language),
+  );
+  if (!template) {
+    res.status(400).json({ error: `Template "${templateName}" was not found on your account.` });
+    return;
+  }
+  if (normalizeTemplateStatus(template.status) !== 'approved') {
     res.status(400).json({ error: `Template "${template.name}" is not approved yet.` });
     return;
   }
 
+  const values = Array.isArray(parameters) ? parameters.map((p) => String(p).trim()) : [];
+  if (values.length < template.variableCount || values.some((value) => !value)) {
+    res.status(400).json({
+      error: `Template "${template.name}" needs ${template.variableCount} value(s).`,
+    });
+    return;
+  }
+
   try {
-    const text = `📋 Template · ${template.name} — "${template.body}"`;
-    const status = await deliverOutbound(req.auth.userId, contact, text);
+    await sendTemplateMessage(
+      contact,
+      { name: template.name, language: template.language },
+      values.slice(0, template.variableCount),
+      { accessToken: workspace.accessToken, phoneNumberId: workspace.phoneNumberId },
+    );
+    const rendered = template.body.replace(
+      /\{\{(\d+)\}\}/g,
+      (placeholder, index: string) => values[Number(index) - 1] ?? placeholder,
+    );
     const stored = insertConversationMessage({
       workspaceId: workspace.id,
       contactNumber: contact,
       direction: 'out',
-      message: text,
-      status,
+      message: rendered,
+      type: 'template',
+      status: 'sent',
       templateName: template.name,
     });
     res.status(201).json({ message: stored });

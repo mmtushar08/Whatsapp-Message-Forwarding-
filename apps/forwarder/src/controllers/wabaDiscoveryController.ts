@@ -1,18 +1,10 @@
 import { Request, Response } from 'express';
-import axios from 'axios';
-
-const GRAPH_BASE = 'https://graph.facebook.com/v19.0';
-
-interface WabaAccount {
-  id: string;
-  name: string;
-}
-
-interface PhoneNumber {
-  id: string;
-  display_phone_number: string;
-  verified_name: string;
-}
+import {
+  discoverWabaIds,
+  getWabaName,
+  listWabaPhoneNumbers,
+  MetaApiError,
+} from '../services/metaGraphService';
 
 interface PhoneOption {
   wabaId: string;
@@ -22,6 +14,11 @@ interface PhoneOption {
   verifiedName: string;
 }
 
+/**
+ * POST /api/fetch-waba-info
+ * Lists every phone number a pasted access token can reach, so users pick a
+ * number instead of copying IDs out of Meta's dashboard.
+ */
 export async function fetchWabaInfo(req: Request, res: Response): Promise<void> {
   if (!req.auth) {
     res.status(401).json({ error: 'Unauthorized' });
@@ -37,32 +34,24 @@ export async function fetchWabaInfo(req: Request, res: Response): Promise<void> 
   const token = access_token.trim();
 
   try {
-    const wabasRes = await axios.get<{ data: WabaAccount[] }>(
-      `${GRAPH_BASE}/me/whatsapp_business_accounts`,
-      { params: { access_token: token }, timeout: 10000 },
-    );
-
-    const wabas = wabasRes.data.data ?? [];
-    if (wabas.length === 0) {
+    const wabaIds = await discoverWabaIds(token);
+    if (wabaIds.length === 0) {
       res.status(404).json({ error: 'No WhatsApp Business Accounts found for this token.' });
       return;
     }
 
     const phoneArrays = await Promise.all(
-      wabas.map(async (waba) => {
-        const phonesRes = await axios.get<{ data: PhoneNumber[] }>(
-          `${GRAPH_BASE}/${waba.id}/phone_numbers`,
-          {
-            params: { access_token: token, fields: 'id,display_phone_number,verified_name' },
-            timeout: 10000,
-          },
-        );
-        return (phonesRes.data.data ?? []).map<PhoneOption>((phone) => ({
-          wabaId: waba.id,
-          wabaName: waba.name,
+      wabaIds.map(async (wabaId) => {
+        const [wabaName, phones] = await Promise.all([
+          getWabaName(wabaId, token),
+          listWabaPhoneNumbers(wabaId, token),
+        ]);
+        return phones.map<PhoneOption>((phone) => ({
+          wabaId,
+          wabaName,
           phoneNumberId: phone.id,
-          displayPhoneNumber: phone.display_phone_number,
-          verifiedName: phone.verified_name,
+          displayPhoneNumber: phone.displayPhoneNumber,
+          verifiedName: phone.verifiedName,
         }));
       }),
     );
@@ -74,12 +63,9 @@ export async function fetchWabaInfo(req: Request, res: Response): Promise<void> 
     }
 
     res.json({ phones });
-  } catch (err) {
-    if (axios.isAxiosError(err)) {
-      const metaError = err.response?.data?.error as { message?: string } | undefined;
-      res.status(400).json({ error: metaError?.message ?? 'Failed to fetch WABA info from Meta.' });
-      return;
-    }
-    res.status(500).json({ error: 'Unexpected error contacting Meta.' });
+  } catch (error) {
+    const message =
+      error instanceof MetaApiError ? error.message : 'Unexpected error contacting Meta.';
+    res.status(error instanceof MetaApiError ? 400 : 500).json({ error: message });
   }
 }

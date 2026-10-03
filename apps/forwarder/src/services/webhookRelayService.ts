@@ -1,5 +1,6 @@
 import axios from 'axios';
 import config from '../config';
+import { assertSafeOutboundUrl } from '../utils/urlSafety';
 import logger from './loggerService';
 
 export interface RelayPayload {
@@ -11,14 +12,26 @@ export interface RelayPayload {
   businessLabel: string;
 }
 
-export async function relayToWebhook(url: string, payload: RelayPayload): Promise<void> {
+export interface DeliveryResult {
+  success: boolean;
+  error?: string;
+}
+
+export async function relayToWebhook(url: string, payload: RelayPayload): Promise<DeliveryResult> {
   try {
-    await axios.post(url, payload, {
+    // Re-checked at send time: DNS can change after the URL was saved.
+    const safeUrl = await assertSafeOutboundUrl(url);
+    await axios.post(safeUrl, payload, {
       timeout: config.whatsappTimeoutMs,
       headers: { 'Content-Type': 'application/json' },
+      maxRedirects: 0,
     });
     logger.info(`Webhook relay delivered to ${url}`);
+    return { success: true };
   } catch (error) {
-    logger.warn(`Webhook relay to ${url} failed: ${(error as Error).message}`);
+    const status = (error as { response?: { status?: number } }).response?.status;
+    const message = status ? `Webhook responded with HTTP ${status}` : (error as Error).message;
+    logger.warn(`Webhook relay to ${url} failed: ${message}`);
+    return { success: false, error: message };
   }
 }

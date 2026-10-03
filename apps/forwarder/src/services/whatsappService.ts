@@ -1,28 +1,121 @@
-import axios, { AxiosError } from 'axios';
+import axios from 'axios';
 import config from '../config';
 import { getForwardToNumber } from '../controllers/configController';
 import { SendMessagePayload, SendMessageResponse } from '../types/whatsapp';
 import { withRetry } from '../utils/retry';
 import logger from './loggerService';
-
-const GRAPH_API_URL = 'https://graph.facebook.com/v18.0';
+import {
+  graphUrl,
+  MetaApiError,
+  OUTSIDE_SESSION_WINDOW_CODE,
+  toMetaApiError,
+} from './metaGraphService';
 
 export interface WhatsappRuntimeConfig {
   accessToken: string;
   phoneNumberId: string;
 }
 
+/** Approved template used when free-form text is refused (24h window closed). */
+export interface ForwardTemplate {
+  name: string;
+  language: string;
+}
+
+export interface TemplateParameter {
+  type: 'text';
+  text: string;
+}
+
+const defaultRuntime = (): WhatsappRuntimeConfig => ({
+  accessToken: config.whatsappAccessToken,
+  phoneNumberId: config.whatsappPhoneNumberId,
+});
+
+async function postMessage(
+  payload: Record<string, unknown>,
+  runtimeConfig: WhatsappRuntimeConfig,
+): Promise<SendMessageResponse> {
+  const url = graphUrl(`${runtimeConfig.phoneNumberId}/messages`);
+  const headers = {
+    Authorization: `Bearer ${runtimeConfig.accessToken}`,
+    'Content-Type': 'application/json',
+  };
+
+  try {
+    return await withRetry(
+      async () => {
+        try {
+          const response = await axios.post<SendMessageResponse>(url, payload, {
+            headers,
+            timeout: config.whatsappTimeoutMs,
+          });
+          return response.data;
+        } catch (error) {
+          throw toMetaApiError(error, 'WhatsApp API error');
+        }
+      },
+      config.maxRetryAttempts,
+      config.retryBaseDelayMs,
+      (error) => !(error instanceof MetaApiError) || error.transient,
+    );
+  } catch (error) {
+    logger.error((error as Error).message);
+    throw error;
+  }
+}
+
+/**
+ * Template parameters may not contain newlines, tabs or 4+ consecutive
+ * spaces, and the rendered body is capped at 1024 characters.
+ */
+export function toTemplateText(value: string, maxLength = 700): string {
+  const flat = value
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/ {4,}/g, '   ')
+    .trim();
+  return flat.length > maxLength ? `${flat.slice(0, maxLength - 1)}…` : flat || '-';
+}
+
+export async function sendTemplateMessage(
+  to: string,
+  template: ForwardTemplate,
+  bodyParameters: string[],
+  runtimeConfig: WhatsappRuntimeConfig,
+): Promise<SendMessageResponse> {
+  const components =
+    bodyParameters.length > 0
+      ? [
+          {
+            type: 'body',
+            parameters: bodyParameters.map<TemplateParameter>((text) => ({
+              type: 'text',
+              text: toTemplateText(text),
+            })),
+          },
+        ]
+      : [];
+
+  const response = await postMessage(
+    {
+      messaging_product: 'whatsapp',
+      to,
+      type: 'template',
+      template: { name: template.name, language: { code: template.language }, components },
+    },
+    runtimeConfig,
+  );
+  logger.info(`Template "${template.name}" sent to ${to}`);
+  return response;
+}
+
 export async function forwardMessageTo(
   from: string,
   originalText: string,
   to: string,
-  runtimeConfig: WhatsappRuntimeConfig = {
-    accessToken: config.whatsappAccessToken,
-    phoneNumberId: config.whatsappPhoneNumberId,
-  },
+  runtimeConfig: WhatsappRuntimeConfig = defaultRuntime(),
+  fallbackTemplate?: ForwardTemplate,
 ): Promise<SendMessageResponse> {
-  const url = `${GRAPH_API_URL}/${runtimeConfig.phoneNumberId}/messages`;
-
   const payload: SendMessagePayload = {
     messaging_product: 'whatsapp',
     to,
@@ -32,33 +125,27 @@ export async function forwardMessageTo(
     },
   };
 
-  const headers = {
-    Authorization: `Bearer ${runtimeConfig.accessToken}`,
-    'Content-Type': 'application/json',
-  };
-
   logger.info(`Forwarding message from ${from} to ${to}`);
 
   try {
-    return await withRetry(
-      async () => {
-        const response = await axios.post<SendMessageResponse>(url, payload, {
-          headers,
-          timeout: config.whatsappTimeoutMs,
-        });
-        logger.info(
-          `Message forwarded successfully. ID: ${response.data.messages?.[0]?.id ?? 'unknown'}`,
-        );
-        return response.data;
-      },
-      config.maxRetryAttempts,
-      config.retryBaseDelayMs,
+    const response = await postMessage(
+      payload as unknown as Record<string, unknown>,
+      runtimeConfig,
     );
+    logger.info(`Message forwarded successfully. ID: ${response.messages?.[0]?.id ?? 'unknown'}`);
+    return response;
   } catch (error) {
-    const axiosError = error as AxiosError;
-    const errorDetails = axiosError.response?.data ?? axiosError.message;
-    logger.error(`Failed to forward message: ${JSON.stringify(errorDetails)}`);
-    throw new Error(`WhatsApp API error: ${JSON.stringify(errorDetails)}`);
+    // Business-initiated free-form text is only allowed within 24h of the
+    // recipient's last message. Outside it, Meta requires a template.
+    if (
+      fallbackTemplate?.name &&
+      error instanceof MetaApiError &&
+      error.code === OUTSIDE_SESSION_WINDOW_CODE
+    ) {
+      logger.info(`24h window closed for ${to}; forwarding via template ${fallbackTemplate.name}`);
+      return sendTemplateMessage(to, fallbackTemplate, [`+${from}`, originalText], runtimeConfig);
+    }
+    throw error;
   }
 }
 
@@ -70,8 +157,6 @@ export async function sendTextMessage(
   text: string,
   runtimeConfig: WhatsappRuntimeConfig,
 ): Promise<SendMessageResponse> {
-  const url = `${GRAPH_API_URL}/${runtimeConfig.phoneNumberId}/messages`;
-
   const payload: SendMessagePayload = {
     messaging_product: 'whatsapp',
     to,
@@ -79,30 +164,9 @@ export async function sendTextMessage(
     text: { body: text },
   };
 
-  const headers = {
-    Authorization: `Bearer ${runtimeConfig.accessToken}`,
-    'Content-Type': 'application/json',
-  };
-
-  try {
-    return await withRetry(
-      async () => {
-        const response = await axios.post<SendMessageResponse>(url, payload, {
-          headers,
-          timeout: config.whatsappTimeoutMs,
-        });
-        logger.info(`Reply sent to ${to}. ID: ${response.data.messages?.[0]?.id ?? 'unknown'}`);
-        return response.data;
-      },
-      config.maxRetryAttempts,
-      config.retryBaseDelayMs,
-    );
-  } catch (error) {
-    const axiosError = error as AxiosError;
-    const errorDetails = axiosError.response?.data ?? axiosError.message;
-    logger.error(`Failed to send reply: ${JSON.stringify(errorDetails)}`);
-    throw new Error(`WhatsApp API error: ${JSON.stringify(errorDetails)}`);
-  }
+  const response = await postMessage(payload as unknown as Record<string, unknown>, runtimeConfig);
+  logger.info(`Reply sent to ${to}. ID: ${response.messages?.[0]?.id ?? 'unknown'}`);
+  return response;
 }
 
 export async function forwardMessage(
@@ -118,10 +182,11 @@ export async function forwardToMultiple(
   originalText: string,
   recipients: string[],
   runtimeConfig?: WhatsappRuntimeConfig,
+  fallbackTemplate?: ForwardTemplate,
 ): Promise<{ to: string; success: boolean; error?: string }[]> {
   const results = await Promise.allSettled(
     recipients.map(async (to) => {
-      await forwardMessageTo(from, originalText, to, runtimeConfig);
+      await forwardMessageTo(from, originalText, to, runtimeConfig, fallbackTemplate);
       return to;
     }),
   );

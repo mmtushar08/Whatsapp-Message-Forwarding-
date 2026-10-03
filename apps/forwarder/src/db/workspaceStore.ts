@@ -1,6 +1,9 @@
 import { createId, decryptSecret, encryptSecret } from '../services/authService';
 import { getDatabase } from './database';
 
+export type ConnectionMethod = 'embedded_signup' | 'manual';
+export type WorkspaceStatus = 'needs_webhook_setup' | 'connected';
+
 export interface WorkspaceRecord {
   id: string;
   user_id: string;
@@ -20,6 +23,12 @@ export interface WorkspaceRecord {
   webhook_relay_url: string;
   email_forward_to: string;
   status: string;
+  connection_method: string;
+  last_webhook_at: string;
+  forward_template_name: string;
+  forward_template_language: string;
+  two_step_pin_encrypted: string | null;
+  setup_warnings: string;
   created_at: string;
   updated_at: string;
 }
@@ -41,14 +50,21 @@ export interface WorkspaceView {
   webhookRelayUrl: string;
   emailForwardTo: string;
   status: string;
+  connectionMethod: ConnectionMethod;
+  lastWebhookAt: string;
+  forwardTemplateName: string;
+  forwardTemplateLanguage: string;
+  /** Two-step verification PIN we set when registering the number, if any. */
+  twoStepPin: string;
+  setupWarnings: string[];
   updatedAt: string;
 }
 
-export interface WorkspaceInput {
+/** Fields a user edits from Settings / onboarding. Connection state is untouched. */
+export interface WorkspaceSettingsInput {
   businessLabel: string;
   sourcePhoneNumber: string;
   phoneNumberId: string;
-  wabaId?: string;
   accessToken?: string;
   appSecret?: string;
   forwardToNumber: string;
@@ -57,6 +73,24 @@ export interface WorkspaceInput {
   forwardingEnabled: boolean;
   webhookRelayUrl: string;
   emailForwardTo: string;
+  forwardTemplateName?: string;
+  forwardTemplateLanguage?: string;
+  webhookBaseUrl?: string;
+}
+
+/** A verified WhatsApp connection (Embedded Signup or manual token import). */
+export interface ConnectionInput {
+  accessToken: string;
+  phoneNumberId: string;
+  wabaId: string;
+  displayPhoneNumber: string;
+  verifiedName: string;
+  connectionMethod: ConnectionMethod;
+  status: WorkspaceStatus;
+  appSecret?: string;
+  twoStepPin?: string;
+  forwardTemplateName?: string;
+  setupWarnings: string[];
   webhookBaseUrl?: string;
 }
 
@@ -78,6 +112,8 @@ export interface WorkspaceRuntime {
   webhookRelayUrl: string;
   emailForwardTo: string;
   status: string;
+  forwardTemplateName: string;
+  forwardTemplateLanguage: string;
 }
 
 function parseCSV(value: string): string[] {
@@ -105,6 +141,12 @@ function toWorkspaceView(record: WorkspaceRecord): WorkspaceView {
     webhookRelayUrl: record.webhook_relay_url ?? '',
     emailForwardTo: record.email_forward_to ?? '',
     status: record.status,
+    connectionMethod: record.connection_method === 'embedded_signup' ? 'embedded_signup' : 'manual',
+    lastWebhookAt: record.last_webhook_at ?? '',
+    forwardTemplateName: record.forward_template_name ?? '',
+    forwardTemplateLanguage: record.forward_template_language || 'en',
+    twoStepPin: record.two_step_pin_encrypted ? decryptSecret(record.two_step_pin_encrypted) : '',
+    setupWarnings: (record.setup_warnings ?? '').split('\n').filter(Boolean),
     updatedAt: record.updated_at,
   };
 }
@@ -128,160 +170,197 @@ function toWorkspaceRuntime(record: WorkspaceRecord): WorkspaceRuntime {
     webhookRelayUrl: record.webhook_relay_url ?? '',
     emailForwardTo: record.email_forward_to ?? '',
     status: record.status,
+    forwardTemplateName: record.forward_template_name ?? '',
+    forwardTemplateLanguage: record.forward_template_language || 'en',
   };
 }
 
-export function getWorkspaceByUserId(userId: string): WorkspaceView | null {
-  const db = getDatabase();
-  const record = db.prepare('SELECT * FROM workspaces WHERE user_id = ?').get(userId) as
+function getRecordByUserId(userId: string): WorkspaceRecord | undefined {
+  return getDatabase().prepare('SELECT * FROM workspaces WHERE user_id = ?').get(userId) as
     | WorkspaceRecord
     | undefined;
+}
+
+function webhookUrlFor(baseUrl: string | undefined): string {
+  const base = (baseUrl ?? process.env['PUBLIC_APP_URL'] ?? '').replace(/\/$/, '');
+  return `${base || 'https://your-domain.com'}/webhook`;
+}
+
+function tokenPreview(token: string): string {
+  return token.slice(0, 8);
+}
+
+export function getWorkspaceByUserId(userId: string): WorkspaceView | null {
+  const record = getRecordByUserId(userId);
   return record ? toWorkspaceView(record) : null;
 }
 
-export function upsertWorkspace(userId: string, input: WorkspaceInput): WorkspaceView {
+export function getWorkspaceRuntimeByUserId(userId: string): WorkspaceRuntime | null {
+  const record = getRecordByUserId(userId);
+  return record ? toWorkspaceRuntime(record) : null;
+}
+
+/**
+ * Returns the user that already owns a phone number ID, if any. A phone number
+ * routes inbound webhooks, so it can belong to exactly one workspace.
+ */
+export function findPhoneNumberOwner(phoneNumberId: string): string | null {
+  const row = getDatabase()
+    .prepare('SELECT user_id FROM workspaces WHERE phone_number_id = ? LIMIT 1')
+    .get(phoneNumberId) as { user_id: string } | undefined;
+  return row?.user_id ?? null;
+}
+
+/**
+ * Creates or updates a workspace from the Settings form. Connection metadata
+ * (status, method, webhook health, PIN, warnings) is preserved on update.
+ */
+export function upsertWorkspace(userId: string, input: WorkspaceSettingsInput): WorkspaceView {
   const db = getDatabase();
-  const existing = db.prepare('SELECT * FROM workspaces WHERE user_id = ?').get(userId) as
-    | WorkspaceRecord
-    | undefined;
+  const existing = getRecordByUserId(userId);
   const timestamp = new Date().toISOString();
-  const workspaceId = existing?.id ?? createId('workspace');
-  const verifyToken = existing?.webhook_verify_token ?? createId('verify');
-  const baseUrl = (input.webhookBaseUrl ?? process.env['PUBLIC_APP_URL'] ?? '').replace(/\/$/, '');
-  const webhookUrl = existing?.webhook_url ?? `${baseUrl || 'https://your-domain.com'}/webhook`;
+  const newToken = input.accessToken?.trim() ?? '';
+  const newAppSecret = input.appSecret?.trim() ?? '';
 
-  const encryptedAccessToken =
-    input.accessToken && input.accessToken.trim().length > 0
-      ? encryptSecret(input.accessToken.trim())
-      : existing?.access_token_encrypted;
-  const accessTokenPreview =
-    input.accessToken && input.accessToken.trim().length > 0
-      ? input.accessToken.trim().slice(0, 8)
-      : existing?.access_token_preview;
-  const encryptedAppSecret =
-    input.appSecret && input.appSecret.trim().length > 0
-      ? encryptSecret(input.appSecret.trim())
-      : (existing?.app_secret_encrypted ?? null);
-
-  if (!encryptedAccessToken || !accessTokenPreview) {
+  const accessTokenEncrypted = newToken
+    ? encryptSecret(newToken)
+    : existing?.access_token_encrypted;
+  if (!accessTokenEncrypted) {
     throw new Error('Access token is required when creating a workspace.');
   }
 
-  db.prepare(
-    `INSERT INTO workspaces (
-      id, user_id, business_label, source_phone_number, phone_number_id, waba_id,
-      access_token_encrypted, app_secret_encrypted, access_token_preview,
-      forward_to_number, extra_recipients, keyword_filters,
-      forwarding_enabled, webhook_verify_token, webhook_url,
-      webhook_relay_url, email_forward_to, status, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(user_id) DO UPDATE SET
-      business_label = excluded.business_label,
-      source_phone_number = excluded.source_phone_number,
-      phone_number_id = excluded.phone_number_id,
-      waba_id = excluded.waba_id,
-      access_token_encrypted = excluded.access_token_encrypted,
-      app_secret_encrypted = excluded.app_secret_encrypted,
-      access_token_preview = excluded.access_token_preview,
-      forward_to_number = excluded.forward_to_number,
-      extra_recipients = excluded.extra_recipients,
-      keyword_filters = excluded.keyword_filters,
-      forwarding_enabled = excluded.forwarding_enabled,
-      webhook_relay_url = excluded.webhook_relay_url,
-      email_forward_to = excluded.email_forward_to,
-      status = excluded.status,
-      updated_at = excluded.updated_at`,
-  ).run(
-    workspaceId,
-    userId,
-    input.businessLabel,
-    input.sourcePhoneNumber,
-    input.phoneNumberId,
-    input.wabaId ?? '',
-    encryptedAccessToken,
-    encryptedAppSecret,
-    accessTokenPreview,
-    input.forwardToNumber,
-    input.extraRecipients.join(','),
-    input.keywordFilters.join(','),
-    input.forwardingEnabled ? 1 : 0,
-    verifyToken,
-    webhookUrl,
-    input.webhookRelayUrl.trim(),
-    input.emailForwardTo.trim(),
-    'needs_webhook_setup',
-    existing?.created_at ?? timestamp,
-    timestamp,
-  );
+  const fields = {
+    business_label: input.businessLabel,
+    source_phone_number: input.sourcePhoneNumber,
+    phone_number_id: input.phoneNumberId,
+    access_token_encrypted: accessTokenEncrypted,
+    access_token_preview: newToken
+      ? tokenPreview(newToken)
+      : (existing?.access_token_preview ?? ''),
+    app_secret_encrypted: newAppSecret
+      ? encryptSecret(newAppSecret)
+      : (existing?.app_secret_encrypted ?? null),
+    forward_to_number: input.forwardToNumber,
+    extra_recipients: input.extraRecipients.join(','),
+    keyword_filters: input.keywordFilters.join(','),
+    forwarding_enabled: input.forwardingEnabled ? 1 : 0,
+    webhook_relay_url: input.webhookRelayUrl.trim(),
+    email_forward_to: input.emailForwardTo.trim(),
+    forward_template_name:
+      input.forwardTemplateName?.trim() ?? existing?.forward_template_name ?? '',
+    forward_template_language:
+      input.forwardTemplateLanguage?.trim() || existing?.forward_template_language || 'en',
+    updated_at: timestamp,
+  };
+
+  if (existing) {
+    const assignments = Object.keys(fields)
+      .map((column) => `${column} = @${column}`)
+      .join(', ');
+    db.prepare(`UPDATE workspaces SET ${assignments} WHERE user_id = @user_id`).run({
+      ...fields,
+      user_id: userId,
+    });
+  } else {
+    insertWorkspace({
+      ...fields,
+      id: createId('workspace'),
+      user_id: userId,
+      waba_id: '',
+      webhook_verify_token: createId('verify'),
+      webhook_url: webhookUrlFor(input.webhookBaseUrl),
+      status: 'needs_webhook_setup',
+      connection_method: 'manual',
+      created_at: timestamp,
+    });
+  }
 
   return getWorkspaceByUserId(userId) as WorkspaceView;
 }
 
-export function saveEmbeddedSignupCredentials(
-  userId: string,
-  input: {
-    accessToken: string;
-    phoneNumberId: string;
-    wabaId: string;
-    webhookBaseUrl?: string;
-  },
-): WorkspaceView {
+/**
+ * Stores a freshly verified WhatsApp connection. Forwarding rules the user
+ * already configured are kept; only connection fields change.
+ */
+export function saveConnection(userId: string, input: ConnectionInput): WorkspaceView {
   const db = getDatabase();
-  const existing = db.prepare('SELECT * FROM workspaces WHERE user_id = ?').get(userId) as
-    | WorkspaceRecord
-    | undefined;
+  const existing = getRecordByUserId(userId);
   const timestamp = new Date().toISOString();
-  const workspaceId = existing?.id ?? createId('workspace');
-  const verifyToken = existing?.webhook_verify_token ?? createId('verify');
-  const baseUrl = (input.webhookBaseUrl ?? process.env['PUBLIC_APP_URL'] ?? '').replace(/\/$/, '');
-  const webhookUrl = existing?.webhook_url ?? `${baseUrl || 'https://your-domain.com'}/webhook`;
-  const cleanToken = input.accessToken.trim();
+  const token = input.accessToken.trim();
 
-  if (!cleanToken) {
+  if (!token) {
     throw new Error('access_token is required');
   }
 
-  db.prepare(
-    `INSERT INTO workspaces (
-      id, user_id, business_label, source_phone_number, phone_number_id, waba_id,
-      access_token_encrypted, app_secret_encrypted, access_token_preview,
-      forward_to_number, extra_recipients, keyword_filters,
-      forwarding_enabled, webhook_verify_token, webhook_url,
-      webhook_relay_url, email_forward_to, status, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(user_id) DO UPDATE SET
-      business_label = excluded.business_label,
-      phone_number_id = excluded.phone_number_id,
-      waba_id = excluded.waba_id,
-      access_token_encrypted = excluded.access_token_encrypted,
-      access_token_preview = excluded.access_token_preview,
-      forwarding_enabled = excluded.forwarding_enabled,
-      status = excluded.status,
-      updated_at = excluded.updated_at`,
-  ).run(
-    workspaceId,
-    userId,
-    existing?.business_label || 'WhatsApp Business Account',
-    existing?.source_phone_number || '',
-    input.phoneNumberId.trim(),
-    input.wabaId.trim(),
-    encryptSecret(cleanToken),
-    existing?.app_secret_encrypted ?? null,
-    cleanToken.slice(0, 8),
-    existing?.forward_to_number || '',
-    existing?.extra_recipients || '',
-    existing?.keyword_filters || '',
-    0,
-    verifyToken,
-    webhookUrl,
-    existing?.webhook_relay_url || '',
-    existing?.email_forward_to || '',
-    'connected',
-    existing?.created_at ?? timestamp,
-    timestamp,
-  );
+  const fields = {
+    business_label:
+      existing?.business_label && existing.business_label !== 'WhatsApp Business Account'
+        ? existing.business_label
+        : input.verifiedName || 'WhatsApp Business Account',
+    source_phone_number: input.displayPhoneNumber || existing?.source_phone_number || '',
+    phone_number_id: input.phoneNumberId.trim(),
+    waba_id: input.wabaId.trim(),
+    access_token_encrypted: encryptSecret(token),
+    access_token_preview: tokenPreview(token),
+    app_secret_encrypted: input.appSecret?.trim()
+      ? encryptSecret(input.appSecret.trim())
+      : (existing?.app_secret_encrypted ?? null),
+    status: input.status,
+    connection_method: input.connectionMethod,
+    forward_template_name: input.forwardTemplateName ?? existing?.forward_template_name ?? '',
+    two_step_pin_encrypted: input.twoStepPin
+      ? encryptSecret(input.twoStepPin)
+      : (existing?.two_step_pin_encrypted ?? null),
+    setup_warnings: input.setupWarnings.join('\n'),
+    updated_at: timestamp,
+  };
+
+  if (existing) {
+    const assignments = Object.keys(fields)
+      .map((column) => `${column} = @${column}`)
+      .join(', ');
+    db.prepare(`UPDATE workspaces SET ${assignments} WHERE user_id = @user_id`).run({
+      ...fields,
+      user_id: userId,
+    });
+  } else {
+    insertWorkspace({
+      ...fields,
+      id: createId('workspace'),
+      user_id: userId,
+      forward_to_number: '',
+      extra_recipients: '',
+      keyword_filters: '',
+      forwarding_enabled: 1,
+      webhook_verify_token: createId('verify'),
+      webhook_url: webhookUrlFor(input.webhookBaseUrl),
+      webhook_relay_url: '',
+      email_forward_to: '',
+      created_at: timestamp,
+    });
+  }
 
   return getWorkspaceByUserId(userId) as WorkspaceView;
+}
+
+function insertWorkspace(row: Record<string, string | number | null>): void {
+  const columns = Object.keys(row);
+  getDatabase()
+    .prepare(
+      `INSERT INTO workspaces (${columns.join(', ')})
+       VALUES (${columns.map((column) => `@${column}`).join(', ')})`,
+    )
+    .run(row);
+}
+
+/**
+ * Records that Meta reached us for this workspace — proof the webhook is wired
+ * up, so a workspace waiting on webhook setup becomes connected.
+ */
+export function markWebhookActivity(workspaceId: string): void {
+  getDatabase()
+    .prepare(`UPDATE workspaces SET last_webhook_at = ?, status = 'connected' WHERE id = ?`)
+    .run(new Date().toISOString(), workspaceId);
 }
 
 export function getWorkspaceRuntimeByVerifyToken(verifyToken: string): WorkspaceRuntime | null {
