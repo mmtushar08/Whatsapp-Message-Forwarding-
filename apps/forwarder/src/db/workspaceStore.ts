@@ -85,6 +85,8 @@ export interface ConnectionInput {
   wabaId: string;
   displayPhoneNumber: string;
   verifiedName: string;
+  /** Name the user typed during onboarding; wins over Meta's verified name. */
+  businessLabel?: string;
   connectionMethod: ConnectionMethod;
   status: WorkspaceStatus;
   appSecret?: string;
@@ -294,9 +296,10 @@ export function saveConnection(userId: string, input: ConnectionInput): Workspac
 
   const fields = {
     business_label:
-      existing?.business_label && existing.business_label !== 'WhatsApp Business Account'
+      input.businessLabel?.trim() ||
+      (existing?.business_label && existing.business_label !== 'WhatsApp Business Account'
         ? existing.business_label
-        : input.verifiedName || 'WhatsApp Business Account',
+        : input.verifiedName || 'WhatsApp Business Account'),
     source_phone_number: input.displayPhoneNumber || existing?.source_phone_number || '',
     phone_number_id: input.phoneNumberId.trim(),
     waba_id: input.wabaId.trim(),

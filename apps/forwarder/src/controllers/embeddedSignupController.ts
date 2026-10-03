@@ -28,10 +28,11 @@ export async function completeEmbeddedSignup(req: Request, res: Response): Promi
     return;
   }
 
-  const { code, phone_number_id, waba_id } = req.body as {
+  const { code, phone_number_id, waba_id, business_label } = req.body as {
     code?: string;
     phone_number_id?: string;
     waba_id?: string;
+    business_label?: string;
   };
 
   if (!code?.trim() || !phone_number_id?.trim() || !waba_id?.trim()) {
@@ -49,6 +50,7 @@ export async function completeEmbeddedSignup(req: Request, res: Response): Promi
       userId: req.auth.userId,
       number,
       method: 'embedded_signup',
+      businessLabel: business_label?.trim().slice(0, 120),
       webhookBaseUrl: deriveBaseUrl(req),
     });
     res.status(200).json({ success: true, workspace });
@@ -68,11 +70,12 @@ export async function saveEmbeddedSignup(req: Request, res: Response): Promise<v
     return;
   }
 
-  const { access_token, phone_number_id, waba_id, app_secret } = req.body as {
+  const { access_token, phone_number_id, waba_id, app_secret, business_label } = req.body as {
     access_token?: string;
     phone_number_id?: string;
     waba_id?: string;
     app_secret?: string;
+    business_label?: string;
   };
 
   if (!access_token?.trim() || !phone_number_id?.trim() || !waba_id?.trim()) {
@@ -93,6 +96,7 @@ export async function saveEmbeddedSignup(req: Request, res: Response): Promise<v
       number,
       method: 'manual',
       appSecret: app_secret?.trim() || undefined,
+      businessLabel: business_label?.trim().slice(0, 120),
       webhookBaseUrl: deriveBaseUrl(req),
     });
     res.status(200).json({ success: true, workspace });

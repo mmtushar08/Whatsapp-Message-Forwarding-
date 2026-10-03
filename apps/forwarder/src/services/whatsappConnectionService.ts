@@ -170,6 +170,7 @@ export async function connectVerifiedNumber(params: {
   number: VerifiedNumber;
   method: ConnectionMethod;
   appSecret?: string;
+  businessLabel?: string;
   webhookBaseUrl?: string;
 }): Promise<WorkspaceView> {
   const { userId, number, method } = params;
@@ -192,6 +193,7 @@ export async function connectVerifiedNumber(params: {
     wabaId: number.wabaId,
     displayPhoneNumber: number.phone.displayPhoneNumber,
     verifiedName: number.phone.verifiedName,
+    businessLabel: params.businessLabel,
     connectionMethod: method,
     status: activation.status,
     appSecret: params.appSecret,

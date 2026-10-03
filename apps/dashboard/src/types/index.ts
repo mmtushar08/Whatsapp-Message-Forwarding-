@@ -42,6 +42,17 @@ export interface WorkspaceSetup {
   webhookRelayUrl: string;
   emailForwardTo: string;
   status: 'needs_webhook_setup' | 'connected';
+  /** embedded_signup: webhooks are managed for the user. manual: their own Meta app. */
+  connectionMethod: 'embedded_signup' | 'manual';
+  /** When Meta last reached the webhook for this number ('' if never). */
+  lastWebhookAt: string;
+  /** Approved template used when a destination's 24h window is closed. */
+  forwardTemplateName: string;
+  forwardTemplateLanguage: string;
+  /** Two-step verification PIN set when the number was registered, if any. */
+  twoStepPin: string;
+  /** Problems found while connecting that the user should act on. */
+  setupWarnings: string[];
   updatedAt: string;
 }
 
@@ -57,13 +68,20 @@ export interface WorkspaceSettingsInput {
   forwardingEnabled: boolean;
   webhookRelayUrl: string;
   emailForwardTo: string;
+  forwardTemplateName?: string;
+  forwardTemplateLanguage?: string;
 }
 
-export interface EmbeddedSignupCredentials {
+/** A number picked from a pasted access token (customers with their own Meta app). */
+export interface ManualConnectionInput {
   accessToken: string;
   phoneNumberId: string;
   wabaId: string;
+  appSecret?: string;
+  businessLabel?: string;
 }
+
+export type MessageChannel = 'whatsapp' | 'email' | 'webhook';
 
 export interface PrototypeMessageLog {
   id: string | number;
@@ -74,9 +92,12 @@ export interface PrototypeMessageLog {
   status: 'success' | 'failed';
   forwardedAt: string;
   error?: string;
+  channel: MessageChannel;
 }
 
 export interface MessageStats {
+  /** Inbound messages received on the business number. */
+  received?: number;
   total: number;
   success: number;
   failed: number;

@@ -42,7 +42,10 @@ export default function Inbox() {
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [session, setSession] = useState<SessionInfo>({ open: false, expiresAt: null });
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+  const [templateError, setTemplateError] = useState<string | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [chosenTemplate, setChosenTemplate] = useState<MessageTemplate | null>(null);
+  const [templateParams, setTemplateParams] = useState<string[]>([]);
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -72,6 +75,7 @@ export default function Inbox() {
       setMessages(data.messages);
       setSession(data.session);
       setShowTemplates(false);
+      setChosenTemplate(null);
       setError(null);
     } catch (e) {
       if (selectedRef.current === contact) setError((e as Error).message);
@@ -81,7 +85,9 @@ export default function Inbox() {
   useEffect(() => {
     if (!workspace) { setLoading(false); return; }
     void loadConversations();
-    fetchTemplates().then((t) => setTemplates(t.templates)).catch(() => setTemplates([]));
+    fetchTemplates()
+      .then((t) => { setTemplates(t.templates); setTemplateError(null); })
+      .catch((e: Error) => { setTemplates([]); setTemplateError(e.message); });
   }, [workspace, loadConversations]);
 
   useEffect(() => {
@@ -109,12 +115,17 @@ export default function Inbox() {
     }
   }
 
-  async function handleTemplate(name: string) {
-    if (!selected || sending) return;
+  function chooseTemplate(template: MessageTemplate) {
+    setChosenTemplate(template);
+    setTemplateParams(Array.from({ length: template.variableCount }, () => ''));
+  }
+
+  async function handleTemplate() {
+    if (!selected || !chosenTemplate || sending) return;
     setSending(true);
     setError(null);
     try {
-      await sendConversationTemplate(selected, name);
+      await sendConversationTemplate(selected, chosenTemplate, templateParams.map((p) => p.trim()));
       await loadThread(selected);
       await loadConversations();
     } catch (e) {
@@ -162,7 +173,7 @@ export default function Inbox() {
       {conversations.length === 0 ? (
         <div className="bg-white rounded-[14px] p-10 text-center" style={{ border: '1px solid #DCE4DF', boxShadow: '0 8px 30px rgba(14,59,46,.10)' }}>
           <p className="text-sm" style={{ color: '#5C6B63' }}>
-            {loading ? 'Loading conversations…' : 'No conversations yet. Incoming WhatsApp messages will appear here. (Tip: use "Seed demo data" on the Dashboard in dev.)'}
+            {loading ? 'Loading conversations…' : 'No conversations yet. Messages sent to your WhatsApp number will appear here.'}
           </p>
         </div>
       ) : (
@@ -232,8 +243,8 @@ export default function Inbox() {
                   <div className="text-[10px] mt-1 text-right font-mono" style={{ color: '#5C6B63' }}>
                     {fmtTime(m.created_at)}{' '}
                     {m.direction === 'out' && (
-                      <span style={{ color: m.status === 'simulated' ? '#8A5A0F' : '#4FB6EC', fontWeight: 800 }}>
-                        {m.status === 'simulated' ? '⌛ demo' : '✓✓'}
+                      <span style={{ color: '#4FB6EC', fontWeight: 800 }}>
+                        {m.template_name ? `📋 ${m.template_name} ✓` : '✓'}
                       </span>
                     )}
                   </div>
@@ -285,27 +296,62 @@ export default function Inbox() {
               )}
 
               {showTemplates && (
-                <div className="flex flex-col gap-2 mt-2.5">
+                <div className="flex flex-col gap-2 mt-2.5 max-h-[260px] overflow-y-auto">
+                  {templateError && (
+                    <div className="rounded-[10px] px-3.5 py-2.5 text-[13px]" style={{ background: '#FBE3E2', color: '#A03330' }}>
+                      {templateError}
+                    </div>
+                  )}
+                  {!templateError && templates.length === 0 && (
+                    <div className="text-[13px]" style={{ color: '#5C6B63' }}>
+                      No templates on your WhatsApp Business Account yet. Create one in WhatsApp Manager — it appears here once Meta approves it.
+                    </div>
+                  )}
                   {templates.map((t) => {
                     const approved = t.status === 'approved';
+                    const chosen = chosenTemplate?.name === t.name && chosenTemplate.language === t.language;
                     return (
-                      <button
-                        key={t.name}
-                        type="button"
-                        disabled={!approved || sending}
-                        onClick={() => void handleTemplate(t.name)}
-                        className="rounded-[11px] px-3.5 py-2.5 text-left text-[13px] w-full disabled:opacity-60"
-                        style={{ border: '1.5px solid #DCE4DF', background: '#fff', color: '#14201B' }}
-                      >
-                        <div className="font-mono text-[10.5px] uppercase tracking-[0.08em] flex justify-between mb-0.5" style={{ color: '#168B4B' }}>
-                          <span>{t.name}</span>
-                          <span className="inline-flex items-center rounded-full px-2.5 py-0.5 font-bold normal-case tracking-normal"
-                            style={approved ? { background: '#E4F6EC', color: '#11713E' } : { background: '#FBF0DC', color: '#8A5A0F' }}>
-                            {approved ? 'Approved' : 'In review'}
-                          </span>
-                        </div>
-                        {t.body}
-                      </button>
+                      <div key={`${t.name}:${t.language}`} className="rounded-[11px] text-[13px]"
+                        style={{ border: `1.5px solid ${chosen ? '#1FAB5E' : '#DCE4DF'}`, background: '#fff', color: '#14201B' }}>
+                        <button
+                          type="button"
+                          disabled={!approved || sending}
+                          onClick={() => chooseTemplate(t)}
+                          className="px-3.5 py-2.5 text-left w-full disabled:opacity-60 bg-transparent border-none"
+                        >
+                          <div className="font-mono text-[10.5px] uppercase tracking-[0.08em] flex justify-between mb-0.5" style={{ color: '#168B4B' }}>
+                            <span>{t.name} · {t.language}</span>
+                            <span className="inline-flex items-center rounded-full px-2.5 py-0.5 font-bold normal-case tracking-normal"
+                              style={approved ? { background: '#E4F6EC', color: '#11713E' } : { background: '#FBF0DC', color: '#8A5A0F' }}>
+                              {approved ? 'Approved' : t.status.replace('_', ' ')}
+                            </span>
+                          </div>
+                          {t.body}
+                        </button>
+                        {chosen && (
+                          <div className="px-3.5 pb-3 space-y-2">
+                            {templateParams.map((value, i) => (
+                              <input
+                                key={i}
+                                value={value}
+                                onChange={(e) => setTemplateParams((prev) => prev.map((v, j) => (j === i ? e.target.value : v)))}
+                                placeholder={`Value for {{${i + 1}}}`}
+                                className="w-full rounded-[9px] px-3 py-2 text-sm outline-none"
+                                style={{ border: '1.5px solid #DCE4DF' }}
+                              />
+                            ))}
+                            <button
+                              type="button"
+                              disabled={sending || templateParams.some((v) => !v.trim())}
+                              onClick={() => void handleTemplate()}
+                              className="rounded-[9px] px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-50"
+                              style={{ background: '#1FAB5E' }}
+                            >
+                              {sending ? 'Sending…' : 'Send template'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     );
                   })}
                 </div>

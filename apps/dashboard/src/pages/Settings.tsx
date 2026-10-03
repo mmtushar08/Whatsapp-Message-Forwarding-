@@ -1,7 +1,9 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchSmtpStatus } from '../api/client';
+import { SetupWarnings, WebhookDetails } from '../components/ConnectionNotices';
 import { useProduct } from '../context/ProductContext';
+import { formatPhone, timeAgo } from '../lib/workspace';
 import { PLAN_CAPABILITIES } from '../types';
 
 const INPUT_STYLE = { border: '1.5px solid #DCE4DF' } as const;
@@ -45,6 +47,8 @@ export default function Settings() {
   const [forwardingEnabled, setForwardingEnabled] = useState(workspace?.forwardingEnabled ?? true);
   const [webhookRelayUrl, setWebhookRelayUrl] = useState(workspace?.webhookRelayUrl ?? '');
   const [emailForwardTo, setEmailForwardTo] = useState(workspace?.emailForwardTo ?? '');
+  const [templateName, setTemplateName] = useState(workspace?.forwardTemplateName ?? '');
+  const [templateLanguage, setTemplateLanguage] = useState(workspace?.forwardTemplateLanguage || 'en');
   const [smtpConfigured, setSmtpConfigured] = useState<boolean | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -81,15 +85,24 @@ export default function Settings() {
       extraRecipients: extraRecipients.map((n) => n.trim()).filter(Boolean),
       keywordFilters,
       forwardingEnabled,
-      webhookRelayUrl: webhookRelayUrl.trim(),
-      emailForwardTo: emailForwardTo.trim(),
+      webhookRelayUrl: caps.webhookRelay ? webhookRelayUrl.trim() : '',
+      emailForwardTo: caps.emailForward ? emailForwardTo.trim() : '',
+      forwardTemplateName: templateName.trim(),
+      forwardTemplateLanguage: templateLanguage.trim() || 'en',
     });
     setSaving(false);
     if (!result.ok) { setError(result.error); return; }
+    setAccessToken('');
+    setAppSecret('');
     setSaved('Workspace settings saved successfully.');
   }
 
-  const setupIncomplete = !workspace.sourcePhoneNumber || !workspace.forwardToNumber;
+  const managedByMeta = workspace.connectionMethod === 'embedded_signup';
+  const setupIncomplete =
+    !workspace.forwardToNumber &&
+    workspace.extraRecipients.length === 0 &&
+    !workspace.emailForwardTo &&
+    !workspace.webhookRelayUrl;
 
   return (
     <div className="max-w-3xl">
@@ -98,18 +111,28 @@ export default function Settings() {
 
       {setupIncomplete && (
         <div className="mb-5 rounded-[10px] px-4 py-3 text-sm" style={{ background: '#FBF0DC', border: '1px solid #E8A23D', color: '#8A5A0F' }}>
-          <strong>Finish setup:</strong> add your source WhatsApp number and a forwarding destination below, then save.
+          <strong>Finish setup:</strong> add at least one forwarding destination below, then save.
         </div>
       )}
 
       <form onSubmit={handleSubmit}>
         <Section title="WhatsApp connection">
           <div className="grid gap-4 md:grid-cols-2">
-            <div>
+            <div className={managedByMeta ? 'md:col-span-2' : undefined}>
               <label className={LABEL_CLASS} style={LABEL_STYLE}>Business label</label>
               <input className="w-full rounded-[10px] px-3 py-2.5 text-sm outline-none" style={INPUT_STYLE}
                 value={businessLabel} onChange={(e) => setBusinessLabel(e.target.value)} required />
             </div>
+            {managedByMeta ? (
+              <div className="md:col-span-2 flex flex-wrap items-center justify-between gap-3 rounded-[10px] px-4 py-3 text-sm"
+                style={{ background: '#FAFCFA', border: '1px solid #DCE4DF' }}>
+                <span>
+                  <b className="font-mono">{formatPhone(workspace.sourcePhoneNumber)}</b>
+                  <span style={{ color: '#5C6B63' }}> · connected with Meta · phone ID {workspace.phoneNumberId}</span>
+                </span>
+                <Link to="/onboarding" className="font-semibold underline" style={{ color: '#168B4B' }}>Reconnect or change number</Link>
+              </div>
+            ) : (<>
             <div>
               <label className={LABEL_CLASS} style={LABEL_STYLE}>Source WhatsApp number</label>
               <input className="w-full rounded-[10px] px-3 py-2.5 text-sm outline-none" style={INPUT_STYLE}
@@ -131,9 +154,11 @@ export default function Settings() {
               <label className={LABEL_CLASS} style={LABEL_STYLE}>Replace app secret</label>
               <input type="password" className="w-full rounded-[10px] px-3 py-2.5 text-sm outline-none" style={INPUT_STYLE}
                 value={appSecret} onChange={(e) => setAppSecret(e.target.value)}
-                placeholder={workspace.appSecretConfigured ? 'Leave blank to keep existing' : 'Optional but recommended'} />
+                placeholder={workspace.appSecretConfigured ? 'Leave blank to keep existing' : 'Needed to verify webhooks from your app'} />
             </div>
+            </>)}
           </div>
+          <div className="mt-4"><SetupWarnings workspace={workspace} /></div>
         </Section>
 
         <Section title="Forwarding destinations">
@@ -142,8 +167,10 @@ export default function Settings() {
               <label className={LABEL_CLASS} style={LABEL_STYLE}>Primary WhatsApp destination</label>
               <input className="w-full rounded-[10px] px-3 py-2.5 text-sm outline-none" style={INPUT_STYLE}
                 value={forwardToNumber} onChange={(e) => setForwardToNumber(e.target.value)}
-                placeholder="919000011122" required />
-              <span className="mt-1.5 block text-xs" style={{ color: '#5C6B63' }}>Country code, no + sign. Required.</span>
+                placeholder="919000011122" />
+              <span className="mt-1.5 block text-xs" style={{ color: '#5C6B63' }}>
+                Country code, no + sign. Leave blank if you only forward to email or a webhook.
+              </span>
             </div>
 
             <div>
@@ -238,17 +265,38 @@ export default function Settings() {
           </div>
         </Section>
 
-        <Section title="Webhook endpoint (for Meta dashboard)">
-          <div className="space-y-3 text-sm">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span style={{ color: '#5C6B63' }}>Callback URL</span>
-              <code className="rounded-[7px] px-2.5 py-1.5 font-mono text-xs" style={{ background: '#EDF1EE' }}>{workspace.webhookUrl}</code>
+        <Section title="Forwarding outside the 24-hour window">
+          <p className="text-sm mb-4" style={{ color: '#5C6B63' }}>
+            WhatsApp only allows free-form messages to numbers that wrote to your business in the last 24 hours.
+            For other destinations we resend the forward as this approved template, with the sender as{' '}
+            <code>{'{{1}}'}</code> and the message as <code>{'{{2}}'}</code>.
+            {managedByMeta && ' We created "forward_alert" for you when you connected — Meta usually approves it within minutes.'}
+          </p>
+          <div className="grid gap-4 md:grid-cols-[1fr_140px]">
+            <div>
+              <label className={LABEL_CLASS} style={LABEL_STYLE}>Template name</label>
+              <input className="w-full rounded-[10px] px-3 py-2.5 text-sm outline-none font-mono" style={INPUT_STYLE}
+                value={templateName} onChange={(e) => setTemplateName(e.target.value)}
+                placeholder="forward_alert" />
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span style={{ color: '#5C6B63' }}>Verify token</span>
-              <code className="rounded-[7px] px-2.5 py-1.5 font-mono text-xs" style={{ background: '#EDF1EE' }}>{workspace.webhookVerifyToken}</code>
+            <div>
+              <label className={LABEL_CLASS} style={LABEL_STYLE}>Language</label>
+              <input className="w-full rounded-[10px] px-3 py-2.5 text-sm outline-none font-mono" style={INPUT_STYLE}
+                value={templateLanguage} onChange={(e) => setTemplateLanguage(e.target.value)}
+                placeholder="en" />
             </div>
           </div>
+        </Section>
+
+        <Section title="Webhook">
+          {managedByMeta ? (
+            <p className="text-sm" style={{ color: '#5C6B63' }}>
+              Managed automatically — nothing to configure in Meta.{' '}
+              Last event from Meta: <b style={{ color: '#14201B' }}>{timeAgo(workspace.lastWebhookAt)}</b>.
+            </p>
+          ) : (
+            <WebhookDetails workspace={workspace} />
+          )}
         </Section>
 
         {saved && (

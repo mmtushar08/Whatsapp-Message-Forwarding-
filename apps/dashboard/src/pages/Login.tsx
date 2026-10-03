@@ -1,6 +1,6 @@
 import { FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import MetaLoginModal from '../components/MetaLoginModal';
+import MetaLoginModal, { MetaLoginResult } from '../components/MetaLoginModal';
 import { useProduct } from '../context/ProductContext';
 
 export default function Login() {
@@ -21,11 +21,7 @@ export default function Login() {
     navigate('/app');
   }
 
-  async function handleMetaComplete(params: {
-    accessToken: string;
-    phoneNumberId: string;
-    wabaId: string;
-  }) {
+  async function handleMetaComplete(params: MetaLoginResult) {
     setShowMetaModal(false);
     setSubmitting(true);
     setError(null);
@@ -73,7 +69,7 @@ export default function Login() {
           style={{ background: '#1877F2' }}
         >
           <span className="w-5 h-5 rounded-full bg-white grid place-items-center font-black text-[13px] shrink-0" style={{ color: '#1877F2' }}>f</span>
-          Continue with WhatsApp Business
+          {submitting && !email ? 'Signing you in…' : 'Continue with WhatsApp Business'}
         </button>
 
         <div className="flex items-center gap-3 mb-5">

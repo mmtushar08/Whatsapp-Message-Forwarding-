@@ -9,6 +9,7 @@ const NAV = [
   { to: '/app/numbers',  label: 'Numbers',            icon: '📱' },
   { to: '/app/messages', label: 'Message logs',       icon: '≡' },
   { to: '/app/settings', label: 'Settings',           icon: '⚙' },
+  { to: '/app/billing',  label: 'Plan & billing',     icon: '◈' },
 ];
 
 export default function Sidebar() {
