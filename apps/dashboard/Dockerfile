@@ -4,7 +4,12 @@ COPY apps/dashboard/package*.json ./
 RUN npm install
 COPY apps/dashboard/ ./
 ARG VITE_API_BASE_URL
-RUN VITE_API_BASE_URL=$VITE_API_BASE_URL npm run build
+ARG VITE_META_APP_ID
+ARG VITE_META_CONFIG_ID
+RUN VITE_API_BASE_URL=$VITE_API_BASE_URL \
+    VITE_META_APP_ID=$VITE_META_APP_ID \
+    VITE_META_CONFIG_ID=$VITE_META_CONFIG_ID \
+    npm run build
 
 FROM nginx:alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
