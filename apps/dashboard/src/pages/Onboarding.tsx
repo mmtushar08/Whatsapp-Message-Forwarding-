@@ -10,7 +10,7 @@ import {
   runEmbeddedSignup,
 } from '../lib/embeddedSignup';
 import { useLiveRefresh } from '../lib/useLiveRefresh';
-import { formatPhone, hasDestination, workspaceToSettingsInput } from '../lib/workspace';
+import { formatPhone, workspaceToSettingsInput } from '../lib/workspace';
 import { PLAN_CAPABILITIES } from '../types';
 
 const LABEL_CLASS = 'block text-[12.5px] font-bold uppercase tracking-[0.04em] mb-1.5';
@@ -274,12 +274,7 @@ export default function Onboarding() {
   async function handleSkipRule() {
     // Still keep the business name the user typed in step 1.
     if (workspace && label && label !== workspace.businessLabel) {
-      await saveWorkspace(
-        workspaceToSettingsInput(workspace, {
-          businessLabel: label,
-          forwardingEnabled: workspace.forwardingEnabled && hasDestination(workspace),
-        }),
-      );
+      await saveWorkspace(workspaceToSettingsInput(workspace, { businessLabel: label }));
     }
     setRuleSaved(false);
     setStep(4);

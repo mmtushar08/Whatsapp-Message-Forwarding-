@@ -113,6 +113,35 @@ describe('POST /api/complete-embedded-signup', () => {
     expect(res.body.workspace.twoStepPin).toMatch(/^\d{6}$/);
   });
 
+  it('drops an own-app secret when the number moves to the platform app', async () => {
+    account.appId = 'customers-own-app';
+    const token = await signupAndGetToken('switch@example.com');
+    const manual = await request(app)
+      .post('/api/save-credentials')
+      .set('authorization', `Bearer ${token}`)
+      .send({
+        access_token: account.token,
+        phone_number_id: account.phoneNumberId,
+        waba_id: account.wabaId,
+        app_secret: 'their-app-secret',
+      });
+    expect(manual.body.workspace.appSecretConfigured).toBe(true);
+
+    // Webhooks now come from the platform app, signed with META_APP_SECRET;
+    // keeping the customer's secret would reject every one of them.
+    const res = await request(app)
+      .post('/api/complete-embedded-signup')
+      .set('authorization', `Bearer ${token}`)
+      .send({
+        code: account.code,
+        phone_number_id: account.phoneNumberId,
+        waba_id: account.wabaId,
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.workspace.appSecretConfigured).toBe(false);
+    expect(res.body.workspace.connectionMethod).toBe('embedded_signup');
+  });
+
   it('rejects an invalid code', async () => {
     const token = await signupAndGetToken('badcode@example.com');
 

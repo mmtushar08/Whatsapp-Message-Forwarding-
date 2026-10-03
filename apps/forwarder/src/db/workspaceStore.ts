@@ -89,7 +89,8 @@ export interface ConnectionInput {
   businessLabel?: string;
   connectionMethod: ConnectionMethod;
   status: WorkspaceStatus;
-  appSecret?: string;
+  /** Customer app secret; null clears it (webhooks come via the platform app). */
+  appSecret?: string | null;
   twoStepPin?: string;
   forwardTemplateName?: string;
   setupWarnings: string[];
@@ -305,9 +306,12 @@ export function saveConnection(userId: string, input: ConnectionInput): Workspac
     waba_id: input.wabaId.trim(),
     access_token_encrypted: encryptSecret(token),
     access_token_preview: tokenPreview(token),
-    app_secret_encrypted: input.appSecret?.trim()
-      ? encryptSecret(input.appSecret.trim())
-      : (existing?.app_secret_encrypted ?? null),
+    app_secret_encrypted:
+      input.appSecret === null
+        ? null
+        : input.appSecret?.trim()
+          ? encryptSecret(input.appSecret.trim())
+          : (existing?.app_secret_encrypted ?? null),
     status: input.status,
     connection_method: input.connectionMethod,
     forward_template_name: input.forwardTemplateName ?? existing?.forward_template_name ?? '',

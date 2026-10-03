@@ -134,26 +134,44 @@ export interface TokenInfo {
   wabaIds: string[];
 }
 
+interface DebugTokenBody {
+  data?: {
+    app_id?: string;
+    is_valid?: boolean;
+    granular_scopes?: Array<{ scope: string; target_ids?: string[] }>;
+  };
+}
+
 export async function inspectToken(accessToken: string): Promise<TokenInfo> {
-  try {
-    const body = await graphGet<{
-      data?: {
-        app_id?: string;
-        is_valid?: boolean;
-        granular_scopes?: Array<{ scope: string; target_ids?: string[] }>;
-      };
-    }>('debug_token', accessToken, { input_token: accessToken });
-    const data = body?.data ?? {};
-    const wabaIds = new Set<string>();
-    for (const scope of data.granular_scopes ?? []) {
-      if (scope.scope.startsWith('whatsapp_business')) {
-        scope.target_ids?.forEach((id) => wabaIds.add(id));
-      }
+  // Meta's documented way to inspect a token is with an app access token;
+  // that only works for tokens of our own app, so fall back to the token
+  // inspecting itself (customers who bring their own Meta app).
+  const inspectors = isEmbeddedSignupConfigured()
+    ? [`${config.metaAppId}|${config.metaAppSecret}`, accessToken]
+    : [accessToken];
+  let lastError: unknown;
+  for (const inspector of inspectors) {
+    try {
+      const body = await graphGet<DebugTokenBody>('debug_token', inspector, {
+        input_token: accessToken,
+      });
+      return toTokenInfo(body);
+    } catch (error) {
+      lastError = error;
     }
-    return { appId: data.app_id ?? '', isValid: data.is_valid !== false, wabaIds: [...wabaIds] };
-  } catch (error) {
-    throw toMetaApiError(error, 'Could not inspect the access token');
   }
+  throw toMetaApiError(lastError, 'Could not inspect the access token');
+}
+
+function toTokenInfo(body: DebugTokenBody): TokenInfo {
+  const data = body?.data ?? {};
+  const wabaIds = new Set<string>();
+  for (const scope of data.granular_scopes ?? []) {
+    if (scope.scope.startsWith('whatsapp_business')) {
+      scope.target_ids?.forEach((id) => wabaIds.add(id));
+    }
+  }
+  return { appId: data.app_id ?? '', isValid: data.is_valid !== false, wabaIds: [...wabaIds] };
 }
 
 export interface PhoneNumberDetails {

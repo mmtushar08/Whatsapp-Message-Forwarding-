@@ -303,7 +303,7 @@ describe('connection status', () => {
 });
 
 describe('PATCH /app/workspace validation', () => {
-  it('requires at least one destination while forwarding is on', async () => {
+  it('allows saving without destinations — messages still reach the inbox', async () => {
     const a = await connectedUser('a@example.com', alpha);
     const res = await request(app)
       .patch('/app/workspace')
@@ -315,8 +315,19 @@ describe('PATCH /app/workspace validation', () => {
         forwardToNumber: '',
         forwardingEnabled: true,
       });
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/at least one destination/);
+    expect(res.status).toBe(200);
+    expect(res.body.workspace.forwardingEnabled).toBe(true);
+
+    await request(app)
+      .post('/webhook')
+      .send(payload(change('pn_alpha', 'wamid.nodest', 'anyone there?')))
+      .expect(200);
+    await settle();
+    expect(calls.sentMessages).toHaveLength(0);
+    const inbox = await request(app)
+      .get('/app/conversations')
+      .set('authorization', `Bearer ${a.token}`);
+    expect(inbox.body.conversations[0].lastMessage).toBe('anyone there?');
   });
 
   it('gates email forwarding behind a paid plan', async () => {

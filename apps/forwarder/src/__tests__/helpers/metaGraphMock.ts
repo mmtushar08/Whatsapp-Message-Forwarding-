@@ -98,6 +98,25 @@ export function installMetaGraphMock(
       return { data: { access_token: account.token } };
     }
 
+    if (path === 'debug_token' && cfg?.headers?.['Authorization']?.includes('|')) {
+      // App access token: Meta only inspects tokens issued to that same app.
+      const inspected = accounts.find((a) => a.token === cfg.params?.['input_token']);
+      if (!inspected || inspected.appId !== 'test-app-id') {
+        throw graphError(400, 100, 'The App_id in the input_token did not match the Viewing App');
+      }
+      return {
+        data: {
+          data: {
+            app_id: inspected.appId,
+            is_valid: true,
+            granular_scopes: [
+              { scope: 'whatsapp_business_management', target_ids: [inspected.wabaId] },
+            ],
+          },
+        },
+      };
+    }
+
     const account = byToken(cfg);
     if (path === 'debug_token') {
       return {

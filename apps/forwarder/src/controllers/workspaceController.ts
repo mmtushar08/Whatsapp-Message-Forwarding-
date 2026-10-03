@@ -164,14 +164,9 @@ export async function saveWorkspace(req: Request, res: Response): Promise<void> 
     const normalizedExtras = parseExtraRecipients(extraRecipients);
     const relayUrl = webhookRelayUrl?.trim() ? await assertSafeOutboundUrl(webhookRelayUrl) : '';
     const email = validateOptionalEmail(emailForwardTo?.trim() ?? '');
+    // No destinations is allowed: messages still reach the inbox, and the
+    // dashboard prompts the user to add one.
     const enabled = forwardingEnabled ?? true;
-
-    if (enabled && !primary && normalizedExtras.length === 0 && !relayUrl && !email) {
-      res.status(400).json({
-        error: 'Add at least one destination (WhatsApp number, email or webhook) to forward to.',
-      });
-      return;
-    }
 
     const templateName = forwardTemplateName?.trim();
     if (templateName && !TEMPLATE_NAME_REGEX.test(templateName)) {

@@ -116,10 +116,9 @@ interface ActivationResult {
 async function activate(
   number: VerifiedNumber,
   method: ConnectionMethod,
-  tokenAppId: string,
+  webhooksComeToUs: boolean,
 ): Promise<ActivationResult> {
   const warnings: string[] = [];
-  const webhooksComeToUs = method === 'embedded_signup' || tokenAppId === config.metaAppId;
 
   try {
     await subscribeAppToWaba(number.wabaId, number.accessToken);
@@ -176,16 +175,18 @@ export async function connectVerifiedNumber(params: {
   const { userId, number, method } = params;
   assertNumberAvailable(number.phone.id, userId);
 
-  let tokenAppId = '';
+  // Webhooks for this number reach us through the platform app when it was
+  // connected via Embedded Signup, or the pasted token belongs to our app.
+  let usesPlatformApp = method === 'embedded_signup';
   if (method === 'manual') {
     const info = await inspectToken(number.accessToken).catch(() => null);
     if (info && !info.isValid) {
       throw new ConnectionError('This access token is expired or has been revoked.');
     }
-    tokenAppId = info?.appId ?? '';
+    usesPlatformApp = Boolean(config.metaAppId) && info?.appId === config.metaAppId;
   }
 
-  const activation = await activate(number, method, tokenAppId);
+  const activation = await activate(number, method, usesPlatformApp);
 
   return saveConnection(userId, {
     accessToken: number.accessToken,
@@ -196,7 +197,9 @@ export async function connectVerifiedNumber(params: {
     businessLabel: params.businessLabel,
     connectionMethod: method,
     status: activation.status,
-    appSecret: params.appSecret,
+    // Platform-app webhooks are signed with META_APP_SECRET; a customer app
+    // secret left over from an earlier own-app connection would reject them.
+    appSecret: usesPlatformApp ? null : params.appSecret,
     twoStepPin: activation.twoStepPin,
     forwardTemplateName: activation.forwardTemplateName,
     setupWarnings: activation.warnings,
