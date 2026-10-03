@@ -36,8 +36,9 @@ export function createUser(user: CreateUserInput): void {
 export function getUserByEmail(email: string): UserRecord | null {
   const db = getDatabase();
   return (
-    (db.prepare('SELECT * FROM users WHERE email = ?').get(email.toLowerCase()) as UserRecord | undefined) ??
-    null
+    (db.prepare('SELECT * FROM users WHERE email = ?').get(email.toLowerCase()) as
+      | UserRecord
+      | undefined) ?? null
   );
 }
 
@@ -49,9 +50,9 @@ export function getUserById(id: string): UserRecord | null {
 export function getUserBySubscriptionId(subscriptionId: string): UserRecord | null {
   const db = getDatabase();
   return (
-    (db
-      .prepare('SELECT * FROM users WHERE razorpay_subscription_id = ?')
-      .get(subscriptionId) as UserRecord | undefined) ?? null
+    (db.prepare('SELECT * FROM users WHERE razorpay_subscription_id = ?').get(subscriptionId) as
+      | UserRecord
+      | undefined) ?? null
   );
 }
 

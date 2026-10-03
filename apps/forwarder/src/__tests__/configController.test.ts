@@ -25,7 +25,9 @@ describe('configController', () => {
 
   describe('updateForwardToNumber', () => {
     it('returns 401 if admin token is missing', async () => {
-      const res = await request(app).patch('/config/forward-number').send({ phoneNumber: '12345678900' });
+      const res = await request(app)
+        .patch('/config/forward-number')
+        .send({ phoneNumber: '12345678900' });
       expect(res.status).toBe(401);
     });
 
@@ -75,7 +77,9 @@ describe('configController', () => {
 
   describe('dashboard settings flow', () => {
     it('returns protected settings data', async () => {
-      const res = await request(app).get('/config/settings').set('x-admin-token', 'test_admin_token');
+      const res = await request(app)
+        .get('/config/settings')
+        .set('x-admin-token', 'test_admin_token');
       expect(res.status).toBe(200);
       expect(res.body.settings.forwardToNumber).toBeDefined();
       expect(res.body.meta.webhookPath).toBe('/webhook');

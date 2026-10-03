@@ -1,5 +1,6 @@
 import cors from 'cors';
 import express, { Request } from 'express';
+import { Server } from 'http';
 import path from 'path';
 import config from './config';
 import { getDatabase, initDatabase } from './db/database';
@@ -29,7 +30,9 @@ if (trustProxy > 0) {
 
 if (corsOrigin === '*') {
   if (process.env['NODE_ENV'] === 'production') {
-    throw new Error('CORS_ORIGIN must be set to a specific origin in production. Set CORS_ORIGIN in your environment.');
+    throw new Error(
+      'CORS_ORIGIN must be set to a specific origin in production. Set CORS_ORIGIN in your environment.',
+    );
   }
   logger.warn('CORS_ORIGIN is not set - allowing all origins. Set CORS_ORIGIN in production.');
 }
@@ -58,7 +61,9 @@ app.get('/health', (_req, res) => {
     getDatabase().prepare('SELECT 1').get();
     res.json({ status: 'ok', db: 'ok', timestamp: new Date().toISOString() });
   } catch {
-    res.status(503).json({ status: 'error', db: 'unreachable', timestamp: new Date().toISOString() });
+    res
+      .status(503)
+      .json({ status: 'error', db: 'unreachable', timestamp: new Date().toISOString() });
   }
 });
 
@@ -85,6 +90,18 @@ app.use((_req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
+function gracefulShutdown(server: Server, signal: string): void {
+  logger.info(`Received ${signal}. Closing HTTP server...`);
+  server.close(() => {
+    logger.info('HTTP server closed. Exiting.');
+    process.exit(0);
+  });
+  setTimeout(() => {
+    logger.warn('Forced shutdown after timeout.');
+    process.exit(1);
+  }, 10_000).unref();
+}
+
 if (require.main === module) {
   initDatabase();
   const server = app.listen(config.port, () => {
@@ -98,20 +115,8 @@ if (require.main === module) {
     logger.info(`API Docs: http://localhost:${config.port}/docs`);
   });
 
-  function gracefulShutdown(signal: string) {
-    logger.info(`Received ${signal}. Closing HTTP server...`);
-    server.close(() => {
-      logger.info('HTTP server closed. Exiting.');
-      process.exit(0);
-    });
-    setTimeout(() => {
-      logger.warn('Forced shutdown after timeout.');
-      process.exit(1);
-    }, 10_000).unref();
-  }
-
-  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+  process.on('SIGTERM', () => gracefulShutdown(server, 'SIGTERM'));
+  process.on('SIGINT', () => gracefulShutdown(server, 'SIGINT'));
 }
 
 export default app;

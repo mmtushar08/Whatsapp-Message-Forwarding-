@@ -14,6 +14,8 @@ describe('passesFilterForKeywords', () => {
   });
 
   it('returns true when message matches one of multiple keywords', () => {
-    expect(passesFilterForKeywords('This is an important update', ['urgent', 'important'])).toBe(true);
+    expect(passesFilterForKeywords('This is an important update', ['urgent', 'important'])).toBe(
+      true,
+    );
   });
 });

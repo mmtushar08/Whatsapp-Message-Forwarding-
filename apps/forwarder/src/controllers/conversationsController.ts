@@ -92,7 +92,9 @@ async function deliverOutbound(
     // Demo/test credentials can't reach the Graph API. Outside production we
     // record the message as simulated so the product flow stays usable.
     if (process.env['NODE_ENV'] !== 'production') {
-      logger.warn(`Cloud API send failed in dev — storing as simulated: ${(error as Error).message}`);
+      logger.warn(
+        `Cloud API send failed in dev — storing as simulated: ${(error as Error).message}`,
+      );
       return 'simulated';
     }
     throw error;

@@ -2,7 +2,12 @@ import { Request, Response } from 'express';
 import { createSession, revokeSession } from '../db/sessionStore';
 import { createUser, getUserByEmail, getUserById } from '../db/userStore';
 import { getWorkspaceByUserId } from '../db/workspaceStore';
-import { createId, createSessionToken, hashPassword, verifyPassword } from '../services/authService';
+import {
+  createId,
+  createSessionToken,
+  hashPassword,
+  verifyPassword,
+} from '../services/authService';
 
 function sanitizeUser(user: {
   id: string;

@@ -21,9 +21,7 @@ export function getCurrentMonthUsage(workspaceId: string): number {
   if (!workspaceId) return 0;
   const db = getDatabase();
   const row = db
-    .prepare(
-      `SELECT message_count FROM usage_counters WHERE workspace_id = ? AND year_month = ?`,
-    )
+    .prepare(`SELECT message_count FROM usage_counters WHERE workspace_id = ? AND year_month = ?`)
     .get(workspaceId, currentYearMonth()) as { message_count: number } | undefined;
   return row?.message_count ?? 0;
 }

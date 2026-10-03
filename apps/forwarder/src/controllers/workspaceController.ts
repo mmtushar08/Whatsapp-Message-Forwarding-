@@ -11,7 +11,8 @@ const GRAPH_API_URL = 'https://graph.facebook.com/v18.0';
 function deriveWebhookBaseUrl(req: Request): string {
   if (config.publicAppUrl) return config.publicAppUrl.replace(/\/$/, '');
   const proto = (req.headers['x-forwarded-proto'] as string | undefined) ?? req.protocol;
-  const host = (req.headers['x-forwarded-host'] as string | undefined) ?? req.get('host') ?? 'localhost:3000';
+  const host =
+    (req.headers['x-forwarded-host'] as string | undefined) ?? req.get('host') ?? 'localhost:3000';
   return `${proto}://${host}`;
 }
 
@@ -44,10 +45,16 @@ function validateOptionalEmail(value: string): string {
 function parseExtraRecipients(value: string[] | string | undefined): string[] {
   if (!value) return [];
   const raw = Array.isArray(value) ? value : value.split(',');
-  return raw.map((v) => v.trim()).filter(Boolean).map(normalizePhoneNumber);
+  return raw
+    .map((v) => v.trim())
+    .filter(Boolean)
+    .map(normalizePhoneNumber);
 }
 
-async function validateWhatsappCredentials(phoneNumberId: string, accessToken: string): Promise<void> {
+async function validateWhatsappCredentials(
+  phoneNumberId: string,
+  accessToken: string,
+): Promise<void> {
   try {
     await axios.get(`${GRAPH_API_URL}/${phoneNumberId}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -56,13 +63,19 @@ async function validateWhatsappCredentials(phoneNumberId: string, accessToken: s
   } catch (error) {
     const status = (error as AxiosError).response?.status;
     if (status === 401 || status === 403) {
-      throw new Error('Invalid WhatsApp credentials. Please check your Phone Number ID and Access Token in the Meta Developer dashboard.');
+      throw new Error(
+        'Invalid WhatsApp credentials. Please check your Phone Number ID and Access Token in the Meta Developer dashboard.',
+      );
     }
     if (status === 404) {
-      throw new Error('Phone Number ID not found. Make sure you copied it from the correct Meta app.');
+      throw new Error(
+        'Phone Number ID not found. Make sure you copied it from the correct Meta app.',
+      );
     }
     // Network error or timeout — log a warning but allow save to proceed
-    logger.warn(`Could not validate WhatsApp credentials (non-auth error): ${(error as Error).message}`);
+    logger.warn(
+      `Could not validate WhatsApp credentials (non-auth error): ${(error as Error).message}`,
+    );
   }
 }
 
@@ -143,11 +156,17 @@ export async function saveWorkspace(req: Request, res: Response): Promise<void> 
     const normalizedFilters = Array.isArray(keywordFilters)
       ? keywordFilters
       : typeof keywordFilters === 'string'
-        ? keywordFilters.split(',').map((value) => value.trim()).filter(Boolean)
+        ? keywordFilters
+            .split(',')
+            .map((value) => value.trim())
+            .filter(Boolean)
         : [];
 
     const normalizedExtras = parseExtraRecipients(extraRecipients);
-    const validatedRelayUrl = validateOptionalUrl(webhookRelayUrl?.trim() ?? '', 'Webhook relay URL');
+    const validatedRelayUrl = validateOptionalUrl(
+      webhookRelayUrl?.trim() ?? '',
+      'Webhook relay URL',
+    );
     const validatedEmail = validateOptionalEmail(emailForwardTo?.trim() ?? '');
 
     const user = getUserById(req.auth.userId);

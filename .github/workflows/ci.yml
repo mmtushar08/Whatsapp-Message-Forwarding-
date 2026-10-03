@@ -19,18 +19,20 @@ jobs:
         with:
           fetch-depth: 0
 
+      # On a push the default branch IS HEAD, so scanning default_branch..HEAD
+      # fails with "BASE and HEAD commits are the same". Scan the pushed range.
       - name: Scan for secrets
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
-          base: ${{ github.event.repository.default_branch }}
+          base: ${{ github.event_name == 'push' && github.event.before || github.event.repository.default_branch }}
           head: HEAD
           extra_args: --only-verified
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies
@@ -55,3 +57,7 @@ jobs:
           ADMIN_TOKEN: test_admin_token
           APP_ENCRYPTION_KEY: a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2
           LOG_LEVEL: silent
+
+      - name: Type-check & build dashboard
+        working-directory: apps/dashboard
+        run: npm run build

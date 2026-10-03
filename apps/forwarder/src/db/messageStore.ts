@@ -70,9 +70,7 @@ export function getWorkspaceMessageLogs(
  */
 export function getMessageLogCount(): number {
   const db = getDatabase();
-  const row = db
-    .prepare('SELECT COUNT(*) as count FROM message_logs')
-    .get() as { count: number };
+  const row = db.prepare('SELECT COUNT(*) as count FROM message_logs').get() as { count: number };
   return row.count;
 }
 

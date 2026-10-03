@@ -136,15 +136,17 @@ export function applySchema(db: BetterSqlite3.Database): void {
     ON conversation_messages(workspace_id, contact_number, created_at)
   `);
 
-  const messageLogColumns = db
-    .prepare(`PRAGMA table_info(message_logs)`)
-    .all() as Array<{ name: string }>;
+  const messageLogColumns = db.prepare(`PRAGMA table_info(message_logs)`).all() as Array<{
+    name: string;
+  }>;
 
   if (!messageLogColumns.some((column) => column.name === 'workspace_id')) {
     db.exec(`ALTER TABLE message_logs ADD COLUMN workspace_id TEXT`);
   }
 
-  const workspaceColumns = db.prepare(`PRAGMA table_info(workspaces)`).all() as Array<{ name: string }>;
+  const workspaceColumns = db.prepare(`PRAGMA table_info(workspaces)`).all() as Array<{
+    name: string;
+  }>;
   if (!workspaceColumns.some((c) => c.name === 'app_secret_encrypted')) {
     db.exec(`ALTER TABLE workspaces ADD COLUMN app_secret_encrypted TEXT`);
   }

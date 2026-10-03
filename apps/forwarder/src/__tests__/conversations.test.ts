@@ -92,9 +92,9 @@ describe('GET /app/conversations', () => {
       res.body.conversations.map((c: { contactNumber: string }) => [c.contactNumber, c]),
     );
     expect(byContact['919987654401'].contactName).toBe('Rahul Verma');
-    expect(byContact['919987654401'].sessionOpen).toBe(true);   // inbound ~5h ago
-    expect(byContact['919771230882'].sessionOpen).toBe(true);   // inbound ~17h ago
-    expect(byContact['919654321774'].sessionOpen).toBe(false);  // inbound 3 days ago
+    expect(byContact['919987654401'].sessionOpen).toBe(true); // inbound ~5h ago
+    expect(byContact['919771230882'].sessionOpen).toBe(true); // inbound ~17h ago
+    expect(byContact['919654321774'].sessionOpen).toBe(false); // inbound 3 days ago
   });
 });
 
@@ -228,9 +228,7 @@ describe('GET /app/templates', () => {
   it('returns the template catalog', async () => {
     const token = await createConnectedUser('inbox-catalog@example.com');
 
-    const res = await request(app)
-      .get('/app/templates')
-      .set('authorization', `Bearer ${token}`);
+    const res = await request(app).get('/app/templates').set('authorization', `Bearer ${token}`);
 
     expect(res.status).toBe(200);
     expect(res.body.templates).toHaveLength(3);
