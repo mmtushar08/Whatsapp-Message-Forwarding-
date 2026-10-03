@@ -149,9 +149,15 @@ https://abc123.ngrok.io/webhook
 | `GET` | `/` | Built-in admin dashboard |
 | `POST` | `/auth/signup` | Create a hosted-product user account |
 | `POST` | `/auth/login` | Create a session for a hosted-product user |
+| `POST` | `/auth/meta-login` | Sign up / log in with Meta Embedded Signup (one-time `code`) |
 | `GET` | `/auth/me` | Read the signed-in user and workspace |
-| `PATCH` | `/app/workspace` | Save hosted-product workspace setup |
-| `GET` | `/app/workspace` | Read hosted-product workspace setup |
+| `POST` | `/api/complete-embedded-signup` | Connect a number: exchange the code, verify, subscribe webhooks, register |
+| `POST` | `/api/save-credentials` | Connect a number from a permanent access token (verified with Meta) |
+| `POST` | `/api/fetch-waba-info` | List the numbers an access token can reach |
+| `PATCH` | `/app/workspace` | Save forwarding destinations, filters, pause/resume |
+| `GET` | `/app/workspace` | Read workspace setup and connection health |
+| `GET` | `/app/messages`, `/app/messages/stats` | Workspace forwarding logs and stats |
+| `GET` | `/app/conversations`, `/app/templates` | Inbox threads and the WABA's real templates |
 | `GET` | `/config/settings` | Read dashboard settings and endpoint metadata |
 | `PATCH` | `/config/settings` | Update forwarding number, filters, and forwarding state |
 | `PATCH` | `/config/forward-number` | Update forwarding number at runtime |
@@ -299,42 +305,29 @@ These are intentionally not the priority:
 - AI chatbot features
 - complex automation builder
 
-## 🌐 Hosted Web Prototype
+## 🌐 Hosted Web App (`apps/dashboard`)
 
-The existing React workspace at `apps/dashboard` is now being repurposed as the hosted product prototype.
+The React dashboard is the hosted product. Users:
+1. sign up with email or **Continue with WhatsApp Business** (Meta Embedded Signup)
+2. connect their number in Meta's popup — the backend exchanges the code,
+   verifies ownership, subscribes webhooks, registers the number and creates
+   the `forward_alert` template
+3. save a first rule (WhatsApp number, email or webhook; keyword filter optional)
+4. watch forwards arrive in the live feed and message logs, reply from the
+   Inbox (free-form inside 24h, approved templates outside), pause/resume,
+   and manage plan and billing
 
-Current prototype capabilities:
-- landing page
-- signup flow
-- login flow
-- onboarding flow
-- browser-managed workspace settings
-- prototype logs and webhook setup summary
-
-Current prototype limitation:
-- account and workspace data are stored in browser local storage only
-- real multi-user backend auth is not implemented yet
-- real per-user webhook routing is not implemented yet
+Accounts, sessions and workspaces live in SQLite on the backend; access tokens
+are encrypted at rest (AES-256-GCM). Webhooks are routed per phone number, so
+one deployment serves many customers. Setup: [EMBEDDED_SIGNUP_SETUP.md](EMBEDDED_SIGNUP_SETUP.md)
+and [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 Run it locally:
 
 ```bash
 cd apps/dashboard
-npm install
+cp .env.example .env   # VITE_API_BASE_URL, VITE_META_APP_ID, VITE_META_CONFIG_ID
 npm run dev
-```
-
-Backend foundation now added in `apps/forwarder`:
-- user signup/login endpoints
-- session-protected workspace endpoints
-- SQLite tables for users, sessions, and workspaces
-
-Recommended env additions for this foundation:
-
-```env
-APP_ENCRYPTION_KEY=change_this_to_a_long_random_secret
-SESSION_TTL_HOURS=24
-PUBLIC_APP_URL=https://your-domain.com
 ```
 
 ---
@@ -363,6 +356,14 @@ npm run test:watch
 # Run tests with coverage report
 npm run test:coverage
 ```
+
+### End-to-end
+
+`tools/e2e/run.sh` builds both apps, starts them in production mode against a
+mock Meta Graph API, and drives every user flow in Chromium — signup, Meta
+connect, forwarding (with the 24h template fallback), inbox, settings, billing,
+Meta login, multi-tenant routing and security checks. See
+[tools/e2e/README.md](tools/e2e/README.md).
 
 Test files live under `apps/forwarder/src/__tests__/` and cover:
 
@@ -512,6 +513,12 @@ curl -X PATCH http://localhost:3000/config/settings \
 ```
 
 #### Simulate a WhatsApp Webhook (local testing)
+
+`phone_number_id` must be a connected workspace's number, or your
+`WHATSAPP_PHONE_NUMBER_ID` in single-tenant mode — messages for numbers nobody
+owns are ignored. In development without an app secret the signature check is
+skipped; in production sign the body (`X-Hub-Signature-256`).
+
 ```bash
 curl -X POST http://localhost:3000/webhook \
   -H "Content-Type: application/json" \
@@ -522,7 +529,7 @@ curl -X POST http://localhost:3000/webhook \
       "changes": [{
         "value": {
           "messaging_product": "whatsapp",
-          "metadata": { "display_phone_number": "15551234567", "phone_number_id": "987" },
+          "metadata": { "display_phone_number": "15551234567", "phone_number_id": "YOUR_PHONE_NUMBER_ID" },
           "contacts": [{ "profile": { "name": "Test User" }, "wa_id": "15559876543" }],
           "messages": [{
             "from": "15559876543",
@@ -554,9 +561,13 @@ WHATSAPP_APP_SECRET=your_meta_app_secret_here
 
 ### Behaviour
 
+The secret used is the workspace's own app secret (customers who connected
+their own Meta app), otherwise `WHATSAPP_APP_SECRET`, otherwise `META_APP_SECRET`.
+
 | Scenario | Result |
 |----------|--------|
-| `WHATSAPP_APP_SECRET` not set | Signature check skipped (warning logged) |
+| No secret set, `NODE_ENV=production` | `401` — unverifiable webhooks are rejected |
+| No secret set, development | Signature check skipped (warning logged) |
 | Header missing + secret set | `401 Missing signature header` |
 | Header invalid + secret set | `401 Invalid signature` |
 | Header valid + secret set | Request proceeds normally |

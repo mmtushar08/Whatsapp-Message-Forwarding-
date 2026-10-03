@@ -25,10 +25,11 @@ The repo root contains `render.yaml` (a Render Blueprint).
      `https://whatsapp-forwarder.onrender.com`.
 4. After deploy, verify: `https://<service>.onrender.com/health` should return
    `{"status":"ok","db":"ok",...}`.
-5. Add optional env vars in the Render dashboard as needed
-   (`WHATSAPP_APP_SECRET` is strongly recommended once the Meta app exists —
-   it enables webhook signature verification; `SMTP_*` for email forwarding;
-   `RAZORPAY_*` for billing).
+5. Set `META_APP_ID` and `META_APP_SECRET` from the Meta app (App settings →
+   Basic). They are required for "Connect with Meta", and the secret also
+   verifies webhook signatures: **in production, unsigned webhooks are
+   rejected** until a secret is configured. Add `SMTP_*` for email
+   forwarding and `RAZORPAY_*` for billing as needed.
 
 > **Cost note:** the `starter` plan is required because SQLite needs a
 > persistent disk; Render's free tier has no disks and free instances sleep,
@@ -68,19 +69,27 @@ In [developers.facebook.com](https://developers.facebook.com) → your app:
 - User data deletion → Data deletion instructions URL:
   `https://<dashboard-domain>/privacy#data-deletion`
 - App Domains: the dashboard domain (and custom domain if added)
-- Copy the **App Secret** into Render as `WHATSAPP_APP_SECRET`.
+- Copy the **App ID** and **App Secret** into Render as `META_APP_ID` and
+  `META_APP_SECRET`, and the App ID into Vercel as `VITE_META_APP_ID`.
 
-**WhatsApp → Configuration**
+**WhatsApp → Configuration** (once, for the whole platform)
 - Webhook Callback URL: `https://<render-domain>/webhook`
-  (per-workspace URLs are generated from `PUBLIC_APP_URL`; the value shown in
-  the user's Settings page is the authoritative one)
 - Verify Token: the `WEBHOOK_VERIFY_TOKEN` value from Render
   (Environment tab — it was auto-generated)
 - Subscribe to the `messages` webhook field.
 
-**Facebook Login for Business → Settings** (for Embedded Signup)
-- Allowed Domains for the JavaScript SDK: the dashboard domain
-- Valid OAuth Redirect URIs: the dashboard origin
+Customers who connect with Meta never configure webhooks: their WhatsApp
+Business Account is subscribed to this app automatically. Only customers who
+import a token from *their own* Meta app see a per-workspace callback URL and
+verify token in the dashboard.
+
+**Facebook Login for Business** (for Embedded Signup)
+- Configurations: create a WhatsApp Embedded Signup configuration and copy its
+  ID into Vercel as `VITE_META_CONFIG_ID`.
+- Settings → Allowed Domains for the JavaScript SDK: the dashboard domain
+- Settings → Valid OAuth Redirect URIs: the dashboard origin
+
+See [EMBEDDED_SIGNUP_SETUP.md](../EMBEDDED_SIGNUP_SETUP.md) for the full flow.
 
 ## 4. Submission checklist
 
@@ -88,6 +97,8 @@ In [developers.facebook.com](https://developers.facebook.com) → your app:
 - [ ] Dashboard loads over HTTPS; signup → onboarding → settings flow works
 - [ ] `/privacy` and `/terms` publicly reachable (open in incognito)
 - [ ] Webhook verified in Meta dashboard (green checkmark)
+- [ ] "Connect with Meta" completes and the number shows **Connected**
+- [ ] The `forward_alert` template shows as approved in WhatsApp Manager
 - [ ] Test message to the WhatsApp number gets forwarded end-to-end
 - [ ] Business Verification completed (needs custom domain + matching email)
 - [ ] Screencast recorded for App Review showing the full user flow

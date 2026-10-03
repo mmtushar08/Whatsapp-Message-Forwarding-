@@ -1,6 +1,6 @@
 import { FormEvent, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import MetaLoginModal from '../components/MetaLoginModal';
+import MetaLoginModal, { MetaLoginResult } from '../components/MetaLoginModal';
 import { useProduct } from '../context/ProductContext';
 
 export default function Signup() {
@@ -22,11 +22,7 @@ export default function Signup() {
     navigate('/onboarding');
   }
 
-  async function handleMetaComplete(params: {
-    accessToken: string;
-    phoneNumberId: string;
-    wabaId: string;
-  }) {
+  async function handleMetaComplete(params: MetaLoginResult) {
     setShowMetaModal(false);
     setSubmitting(true);
     setError(null);
@@ -62,7 +58,7 @@ export default function Signup() {
         </div>
 
         <h2 className="text-2xl font-bold tracking-tight mb-1" style={{ color: '#14201B' }}>Start forwarding in minutes</h2>
-        <p className="text-sm mb-6" style={{ color: '#5C6B63' }}>Free for your first 500 messages. No card needed.</p>
+        <p className="text-sm mb-6" style={{ color: '#5C6B63' }}>Free for 200 forwarded messages a month. No card needed.</p>
 
         {/* Primary: Meta Business Login */}
         <button
@@ -73,7 +69,7 @@ export default function Signup() {
           style={{ background: '#1877F2' }}
         >
           <span className="w-5 h-5 rounded-full bg-white grid place-items-center font-black text-[13px] shrink-0" style={{ color: '#1877F2' }}>f</span>
-          Continue with WhatsApp Business
+          {submitting && !email ? 'Signing you in…' : 'Continue with WhatsApp Business'}
         </button>
 
         <div className="flex items-center gap-3 mb-5">

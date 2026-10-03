@@ -43,8 +43,15 @@ services:
         sync: false
       - key: PUBLIC_APP_URL
         sync: false
+      # Meta app credentials (developers.facebook.com > App settings > Basic).
+      # Required for "Connect with Meta"; META_APP_SECRET also verifies
+      # webhook signatures — unsigned webhooks are rejected in production.
+      - key: META_APP_ID
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
       # Optional integrations — add in the Render dashboard when needed:
-      # WHATSAPP_APP_SECRET (webhook signature verification, recommended)
+      # META_GRAPH_API_VERSION (defaults to v25.0)
       # SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS, SMTP_FROM (email forwarding)
       # RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET,
       # RAZORPAY_PLAN_STARTER, RAZORPAY_PLAN_PRO, RAZORPAY_PLAN_BUSINESS (billing)

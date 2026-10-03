@@ -1,7 +1,9 @@
 import { clearSessionToken, getSessionToken, setSessionToken } from '../lib/session';
+import type { EmbeddedSignupResult } from '../lib/embeddedSignup';
 import type {
   BillingStatus,
-  EmbeddedSignupCredentials,
+  ManualConnectionInput,
+  MessageChannel,
   MessageStats,
   MarketplaceUser,
   Pagination,
@@ -28,6 +30,7 @@ function normalizeMessages(
     status: 'success' | 'failed';
     forwarded_at: string;
     error?: string | null;
+    channel?: MessageChannel;
   }>,
 ): PrototypeMessageLog[] {
   return items.map((item) => ({
@@ -39,6 +42,7 @@ function normalizeMessages(
     status: item.status,
     forwardedAt: item.forwarded_at,
     error: item.error ?? undefined,
+    channel: item.channel ?? 'whatsapp',
   }));
 }
 
@@ -64,15 +68,13 @@ async function request<T>(path: string, options: RequestInit = {}, auth = false)
   return payload as T;
 }
 
-export async function metaLoginAccount(params: {
-  accessToken: string;
-  phoneNumberId: string;
-  wabaId: string;
-}): Promise<{ user: MarketplaceUser; workspace: WorkspaceSetup | null; isNewUser: boolean }> {
+export async function metaLoginAccount(
+  params: EmbeddedSignupResult,
+): Promise<{ user: MarketplaceUser; workspace: WorkspaceSetup | null; isNewUser: boolean }> {
   const payload = await request<AuthPayload & { isNewUser: boolean }>('/auth/meta-login', {
     method: 'POST',
     body: JSON.stringify({
-      access_token: params.accessToken,
+      code: params.code,
       phone_number_id: params.phoneNumberId,
       waba_id: params.wabaId,
     }),
@@ -175,6 +177,8 @@ export async function saveWorkspaceRequest(
         forwardingEnabled: input.forwardingEnabled,
         webhookRelayUrl: input.webhookRelayUrl,
         emailForwardTo: input.emailForwardTo,
+        forwardTemplateName: input.forwardTemplateName,
+        forwardTemplateLanguage: input.forwardTemplateLanguage,
       }),
     },
     true,
@@ -185,8 +189,30 @@ export async function saveWorkspaceRequest(
   };
 }
 
-export async function saveEmbeddedSignupCredentials(
-  input: EmbeddedSignupCredentials,
+/** Finishes Meta Embedded Signup for the signed-in user (code exchanged server-side). */
+export async function completeEmbeddedSignup(
+  input: EmbeddedSignupResult & { businessLabel?: string },
+): Promise<{ workspace: WorkspaceSetup }> {
+  const payload = await request<{ success: boolean; workspace: WorkspaceSetup }>(
+    '/api/complete-embedded-signup',
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        code: input.code,
+        phone_number_id: input.phoneNumberId,
+        waba_id: input.wabaId,
+        business_label: input.businessLabel,
+      }),
+    },
+    true,
+  );
+
+  return { workspace: payload.workspace };
+}
+
+/** Connects a number from a pasted permanent access token. */
+export async function connectWithAccessToken(
+  input: ManualConnectionInput,
 ): Promise<{ workspace: WorkspaceSetup }> {
   const payload = await request<{ success: boolean; workspace: WorkspaceSetup }>(
     '/api/save-credentials',
@@ -196,6 +222,8 @@ export async function saveEmbeddedSignupCredentials(
         access_token: input.accessToken,
         phone_number_id: input.phoneNumberId,
         waba_id: input.wabaId,
+        app_secret: input.appSecret,
+        business_label: input.businessLabel,
       }),
     },
     true,
@@ -218,6 +246,7 @@ export async function fetchWorkspaceMessages(
       status: 'success' | 'failed';
       forwarded_at: string;
       error?: string | null;
+      channel?: MessageChannel;
     }>;
     pagination: Pagination;
   }>(`/app/messages?limit=${limit}&offset=${offset}`, { method: 'GET' }, true);
@@ -226,6 +255,11 @@ export async function fetchWorkspaceMessages(
     data: normalizeMessages(payload.data),
     pagination: payload.pagination,
   };
+}
+
+export async function fetchWorkspace(): Promise<WorkspaceSetup> {
+  const payload = await request<{ workspace: WorkspaceSetup }>('/app/workspace', { method: 'GET' }, true);
+  return payload.workspace;
 }
 
 export async function fetchWorkspaceStats(): Promise<MessageStats> {
@@ -267,8 +301,11 @@ export interface SessionInfo {
 
 export interface MessageTemplate {
   name: string;
-  status: 'approved' | 'in_review';
+  language: string;
+  category: string;
+  status: 'approved' | 'in_review' | 'rejected' | 'paused' | 'disabled';
   body: string;
+  variableCount: number;
 }
 
 export async function fetchConversations(): Promise<{ conversations: ConversationSummary[] }> {
@@ -298,11 +335,15 @@ export async function sendConversationReply(
 
 export async function sendConversationTemplate(
   contact: string,
-  templateName: string,
+  template: { name: string; language: string },
+  parameters: string[],
 ): Promise<{ message: ConversationMessage }> {
   return request<{ message: ConversationMessage }>(
     `/app/conversations/${encodeURIComponent(contact)}/template`,
-    { method: 'POST', body: JSON.stringify({ templateName }) },
+    {
+      method: 'POST',
+      body: JSON.stringify({ templateName: template.name, language: template.language, parameters }),
+    },
     true,
   );
 }

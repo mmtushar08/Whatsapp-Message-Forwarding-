@@ -17,11 +17,15 @@ jest.mock('axios');
 import app from '../index';
 import { applySchema } from '../db/database';
 import { computeSessionWindow } from '../db/conversationStore';
+import { fakeMetaAccount, graphError, installMetaGraphMock } from './helpers/metaGraphMock';
 
 const mockedAxios = axios as jest.Mocked<typeof axios>;
+const account = fakeMetaAccount({ phoneNumberId: 'pnid_inbox', wabaId: 'waba_inbox' });
 
 beforeEach(() => {
+  mockedAxios.get.mockReset();
   mockedAxios.post.mockReset();
+  installMetaGraphMock(mockedAxios, [account]);
   testDb = new BetterSqlite3(':memory:');
   applySchema(testDb);
 });
@@ -40,7 +44,8 @@ async function createConnectedUser(email: string): Promise<string> {
   await request(app)
     .post('/api/save-credentials')
     .set('authorization', `Bearer ${token}`)
-    .send({ access_token: 'inbox-token', phone_number_id: 'pnid_inbox', waba_id: 'waba_inbox' });
+    .send({ access_token: account.token, phone_number_id: 'pnid_inbox', waba_id: 'waba_inbox' })
+    .expect(200);
   return token;
 }
 
@@ -92,9 +97,9 @@ describe('GET /app/conversations', () => {
       res.body.conversations.map((c: { contactNumber: string }) => [c.contactNumber, c]),
     );
     expect(byContact['919987654401'].contactName).toBe('Rahul Verma');
-    expect(byContact['919987654401'].sessionOpen).toBe(true);   // inbound ~5h ago
-    expect(byContact['919771230882'].sessionOpen).toBe(true);   // inbound ~17h ago
-    expect(byContact['919654321774'].sessionOpen).toBe(false);  // inbound 3 days ago
+    expect(byContact['919987654401'].sessionOpen).toBe(true); // inbound ~5h ago
+    expect(byContact['919771230882'].sessionOpen).toBe(true); // inbound ~17h ago
+    expect(byContact['919654321774'].sessionOpen).toBe(false); // inbound 3 days ago
   });
 });
 
@@ -151,19 +156,24 @@ describe('POST /app/conversations/:contact/reply', () => {
     expect(thread.body.messages).toHaveLength(4);
   });
 
-  it('stores the reply as simulated when the Cloud API fails outside production', async () => {
-    const token = await createConnectedUser('inbox-sim@example.com');
+  it('reports Meta’s error and stores nothing when the send is rejected', async () => {
+    const token = await createConnectedUser('inbox-fail@example.com');
     await seed(token);
 
-    mockedAxios.post.mockRejectedValue(new Error('invalid token'));
+    mockedAxios.post.mockRejectedValue(graphError(400, 131026, 'Message undeliverable'));
 
     const res = await request(app)
       .post('/app/conversations/919987654401/reply')
       .set('authorization', `Bearer ${token}`)
       .send({ message: 'This send will fail upstream.' });
 
-    expect(res.status).toBe(201);
-    expect(res.body.message.status).toBe('simulated');
+    expect(res.status).toBe(502);
+    expect(res.body.error).toMatch(/Message undeliverable/);
+
+    const thread = await request(app)
+      .get('/app/conversations/919987654401/messages')
+      .set('authorization', `Bearer ${token}`);
+    expect(thread.body.messages).toHaveLength(3);
   });
 
   it('returns 409 when the 24-hour session window is closed', async () => {
@@ -181,21 +191,49 @@ describe('POST /app/conversations/:contact/reply', () => {
 });
 
 describe('POST /app/conversations/:contact/template', () => {
-  it('sends an approved template even when the session is closed', async () => {
+  it('sends a real approved template even when the session is closed', async () => {
     const token = await createConnectedUser('inbox-tpl@example.com');
     await seed(token);
-
-    mockedAxios.post.mockResolvedValue({
-      data: { messaging_product: 'whatsapp', messages: [{ id: 'wamid.tpl' }] },
-    });
+    const calls = installMetaGraphMock(mockedAxios, [account]);
 
     const res = await request(app)
       .post('/app/conversations/919654321774/template')
       .set('authorization', `Bearer ${token}`)
-      .send({ templateName: 'follow_up_v2' });
+      .send({ templateName: 'follow_up', parameters: ['Amit', 'your appointment'] });
 
     expect(res.status).toBe(201);
-    expect(res.body.message.template_name).toBe('follow_up_v2');
+    expect(res.body.message.template_name).toBe('follow_up');
+    expect(res.body.message.message).toBe('Hi Amit, following up about your appointment.');
+    expect(calls.sentMessages[0].body).toMatchObject({
+      to: '919654321774',
+      type: 'template',
+      template: {
+        name: 'follow_up',
+        language: { code: 'en' },
+        components: [
+          {
+            type: 'body',
+            parameters: [
+              { type: 'text', text: 'Amit' },
+              { type: 'text', text: 'your appointment' },
+            ],
+          },
+        ],
+      },
+    });
+  });
+
+  it('requires a value for every template variable', async () => {
+    const token = await createConnectedUser('inbox-tpl-vars@example.com');
+    await seed(token);
+
+    const res = await request(app)
+      .post('/app/conversations/919654321774/template')
+      .set('authorization', `Bearer ${token}`)
+      .send({ templateName: 'follow_up', parameters: ['Amit'] });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/needs 2 value/);
   });
 
   it('rejects unapproved templates', async () => {
@@ -225,16 +263,16 @@ describe('POST /app/conversations/:contact/template', () => {
 });
 
 describe('GET /app/templates', () => {
-  it('returns the template catalog', async () => {
+  it('returns the WABA’s templates from Meta', async () => {
     const token = await createConnectedUser('inbox-catalog@example.com');
 
-    const res = await request(app)
-      .get('/app/templates')
-      .set('authorization', `Bearer ${token}`);
+    const res = await request(app).get('/app/templates').set('authorization', `Bearer ${token}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.templates).toHaveLength(3);
-    expect(res.body.templates[0].name).toBe('follow_up_v2');
+    expect(res.body.templates).toEqual([
+      expect.objectContaining({ name: 'follow_up', status: 'approved', variableCount: 2 }),
+      expect.objectContaining({ name: 'payment_reminder', status: 'in_review', variableCount: 1 }),
+    ]);
   });
 });
 

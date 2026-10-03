@@ -4,6 +4,7 @@
  * @param fn - The async function to retry
  * @param maxAttempts - Maximum number of attempts (default: 3)
  * @param baseDelayMs - Base delay in milliseconds (default: 1000)
+ * @param shouldRetry - Return false to fail fast on errors retrying can't fix
  * @returns The result of the function on success
  * @throws The last error if all attempts fail
  */
@@ -11,6 +12,7 @@ export async function withRetry<T>(
   fn: () => Promise<T>,
   maxAttempts: number = 3,
   baseDelayMs: number = 1000,
+  shouldRetry: (error: Error) => boolean = () => true,
 ): Promise<T> {
   let lastError: Error;
 
@@ -20,7 +22,7 @@ export async function withRetry<T>(
     } catch (error) {
       lastError = error as Error;
 
-      if (attempt === maxAttempts) {
+      if (attempt === maxAttempts || !shouldRetry(lastError)) {
         break;
       }
 

@@ -4,6 +4,7 @@ import {
   getWorkspaceMessageLogs,
   getWorkspaceMessageStats,
 } from '../db/messageStore';
+import { countInboundMessages } from '../db/conversationStore';
 import { getCurrentMonthUsage } from '../db/usageStore';
 import { getUserById } from '../db/userStore';
 import { getWorkspaceByUserId } from '../db/workspaceStore';
@@ -48,12 +49,14 @@ export function getWorkspaceStats(req: Request, res: Response): void {
   }
 
   const stats = getWorkspaceMessageStats(workspaceId);
+  const received = countInboundMessages(workspaceId);
   const monthlyUsage = getCurrentMonthUsage(workspaceId);
   const owner = getUserById(req.auth.userId);
   const limits = getLimits(owner?.plan ?? 'free');
 
   res.status(200).json({
     ...stats,
+    received,
     monthlyUsage,
     monthlyLimit: limits.monthlyMessages,
   });

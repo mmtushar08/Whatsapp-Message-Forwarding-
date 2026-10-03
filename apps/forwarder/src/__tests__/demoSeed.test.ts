@@ -1,5 +1,6 @@
 import BetterSqlite3 from 'better-sqlite3';
 import request from 'supertest';
+import axios from 'axios';
 
 let testDb: BetterSqlite3.Database;
 
@@ -11,11 +12,16 @@ jest.mock('../db/database', () => {
     initDatabase: jest.fn(),
   };
 });
+jest.mock('axios');
 
 import app from '../index';
 import { applySchema } from '../db/database';
+import { fakeMetaAccount, installMetaGraphMock } from './helpers/metaGraphMock';
+
+const account = fakeMetaAccount({ phoneNumberId: 'pnid_demo', wabaId: 'waba_demo' });
 
 beforeEach(() => {
+  installMetaGraphMock(axios as jest.Mocked<typeof axios>, [account]);
   testDb = new BetterSqlite3(':memory:');
   applySchema(testDb);
 });
@@ -35,7 +41,8 @@ async function createConnectedUser(email: string): Promise<string> {
   await request(app)
     .post('/api/save-credentials')
     .set('authorization', `Bearer ${token}`)
-    .send({ access_token: 'demo-token', phone_number_id: 'pnid_demo', waba_id: 'waba_demo' });
+    .send({ access_token: account.token, phone_number_id: 'pnid_demo', waba_id: 'waba_demo' })
+    .expect(200);
 
   return token;
 }

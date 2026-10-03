@@ -1,4 +1,10 @@
-import { IncomingMessage, ParsedMessage, WebhookContact, WebhookPayload } from '../types/whatsapp';
+import {
+  IncomingMessage,
+  ParsedMessage,
+  WebhookContact,
+  WebhookPayload,
+  WebhookValue,
+} from '../types/whatsapp';
 
 /**
  * Extracts all incoming text (and non-text) messages from a webhook payload.
@@ -14,21 +20,32 @@ export function extractMessages(payload: WebhookPayload): ParsedMessage[] {
 
   for (const entry of payload.entry ?? []) {
     for (const change of entry.changes ?? []) {
-      const { messages, contacts } = change.value;
+      parsed.push(...extractMessagesFromValue(change.value));
+    }
+  }
 
-      if (!messages || messages.length === 0) {
-        continue;
-      }
+  return parsed;
+}
 
-      // Build a lookup map: wa_id → contact name
-      const contactMap = buildContactMap(contacts ?? []);
+/**
+ * Extracts the messages of a single change. Each change carries its own
+ * metadata.phone_number_id, so callers that route per business number should
+ * work change by change rather than on the flattened payload.
+ */
+export function extractMessagesFromValue(value: WebhookValue | undefined): ParsedMessage[] {
+  const messages = value?.messages;
+  if (!messages || messages.length === 0) {
+    return [];
+  }
 
-      for (const message of messages) {
-        const parsedMessage = parseMessage(message, contactMap);
-        if (parsedMessage) {
-          parsed.push(parsedMessage);
-        }
-      }
+  // Build a lookup map: wa_id → contact name
+  const contactMap = buildContactMap(value.contacts ?? []);
+  const parsed: ParsedMessage[] = [];
+
+  for (const message of messages) {
+    const parsedMessage = parseMessage(message, contactMap);
+    if (parsedMessage) {
+      parsed.push(parsedMessage);
     }
   }
 

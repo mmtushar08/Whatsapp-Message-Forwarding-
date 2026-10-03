@@ -2,16 +2,30 @@ import { Request, Response } from 'express';
 import { createSession, revokeSession } from '../db/sessionStore';
 import { createUser, getUserByEmail, getUserById } from '../db/userStore';
 import { getWorkspaceByUserId } from '../db/workspaceStore';
-import { createId, createSessionToken, hashPassword, verifyPassword } from '../services/authService';
+import {
+  createId,
+  createSessionToken,
+  hashPassword,
+  verifyPassword,
+} from '../services/authService';
 
-function sanitizeUser(user: {
+export interface PublicUser {
+  id: string;
+  name: string;
+  email: string;
+  createdAt: string;
+  plan: 'free' | 'starter' | 'pro' | 'business';
+  planExpiresAt: string;
+}
+
+export function sanitizeUser(user: {
   id: string;
   name: string;
   email: string;
   created_at: string;
   plan?: string;
   plan_expires_at?: string;
-}) {
+}): PublicUser {
   return {
     id: user.id,
     name: user.name,

@@ -1,0 +1,12 @@
+{
+  "name": "e2e",
+  "private": true,
+  "description": "End-to-end check of every user flow against a mock Meta Graph API",
+  "scripts": {
+    "test": "./run.sh"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "playwright-core": "^1.56.0"
+  }
+}

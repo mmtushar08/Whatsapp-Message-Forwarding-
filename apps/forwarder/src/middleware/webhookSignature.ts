@@ -12,6 +12,15 @@ export function verifyWebhookSignature(req: Request, res: Response, next: NextFu
   const appSecret = workspace?.appSecret || config.appSecret;
 
   if (!appSecret) {
+    // Unsigned webhooks would let anyone inject "inbound" messages and make us
+    // send with a customer's credentials — never accept them in production.
+    if (process.env['NODE_ENV'] === 'production') {
+      logger.error(
+        'No app secret configured (META_APP_SECRET / WHATSAPP_APP_SECRET) - rejecting unverifiable webhook.',
+      );
+      res.status(401).json({ error: 'Webhook signature cannot be verified' });
+      return;
+    }
     logger.warn(
       'WHATSAPP_APP_SECRET not set - skipping webhook signature verification. Set it for production security.',
     );

@@ -1,19 +1,16 @@
-import axios, { AxiosError } from 'axios';
 import { Request, Response } from 'express';
-import config from '../config';
 import { getUserById } from '../db/userStore';
-import { getWorkspaceByUserId, upsertWorkspace } from '../db/workspaceStore';
+import {
+  findPhoneNumberOwner,
+  getWorkspaceByUserId,
+  getWorkspaceRuntimeByUserId,
+  upsertWorkspace,
+} from '../db/workspaceStore';
 import logger from '../services/loggerService';
+import { getPhoneNumberDetails, MetaApiError } from '../services/metaGraphService';
 import { validatePlanFeatures } from '../services/planService';
-
-const GRAPH_API_URL = 'https://graph.facebook.com/v18.0';
-
-function deriveWebhookBaseUrl(req: Request): string {
-  if (config.publicAppUrl) return config.publicAppUrl.replace(/\/$/, '');
-  const proto = (req.headers['x-forwarded-proto'] as string | undefined) ?? req.protocol;
-  const host = (req.headers['x-forwarded-host'] as string | undefined) ?? req.get('host') ?? 'localhost:3000';
-  return `${proto}://${host}`;
-}
+import { deriveBaseUrl } from '../utils/deriveBaseUrl';
+import { assertSafeOutboundUrl } from '../utils/urlSafety';
 
 function normalizePhoneNumber(value: string): string {
   const cleaned = value.replace(/\D/g, '');
@@ -24,14 +21,7 @@ function normalizePhoneNumber(value: string): string {
 }
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function validateOptionalUrl(value: string, label: string): string {
-  if (!value) return '';
-  if (!/^https?:\/\//i.test(value)) {
-    throw new Error(`${label} must start with http:// or https://`);
-  }
-  return value.trim();
-}
+const TEMPLATE_NAME_REGEX = /^[a-z0-9_]{1,512}$/;
 
 function validateOptionalEmail(value: string): string {
   if (!value) return '';
@@ -44,25 +34,28 @@ function validateOptionalEmail(value: string): string {
 function parseExtraRecipients(value: string[] | string | undefined): string[] {
   if (!value) return [];
   const raw = Array.isArray(value) ? value : value.split(',');
-  return raw.map((v) => v.trim()).filter(Boolean).map(normalizePhoneNumber);
+  return raw
+    .map((v) => v.trim())
+    .filter(Boolean)
+    .map(normalizePhoneNumber);
 }
 
-async function validateWhatsappCredentials(phoneNumberId: string, accessToken: string): Promise<void> {
+/**
+ * Checks a token can use a phone number. Auth failures block the save;
+ * transient Graph outages are logged and tolerated so a Meta blip never
+ * locks users out of their settings.
+ */
+async function validateWhatsappCredentials(
+  phoneNumberId: string,
+  accessToken: string,
+): Promise<void> {
   try {
-    await axios.get(`${GRAPH_API_URL}/${phoneNumberId}`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-      timeout: config.whatsappTimeoutMs,
-    });
+    await getPhoneNumberDetails(phoneNumberId, accessToken);
   } catch (error) {
-    const status = (error as AxiosError).response?.status;
-    if (status === 401 || status === 403) {
-      throw new Error('Invalid WhatsApp credentials. Please check your Phone Number ID and Access Token in the Meta Developer dashboard.');
+    if (error instanceof MetaApiError && !error.transient) {
+      throw new Error(error.message);
     }
-    if (status === 404) {
-      throw new Error('Phone Number ID not found. Make sure you copied it from the correct Meta app.');
-    }
-    // Network error or timeout — log a warning but allow save to proceed
-    logger.warn(`Could not validate WhatsApp credentials (non-auth error): ${(error as Error).message}`);
+    logger.warn(`Could not validate WhatsApp credentials: ${(error as Error).message}`);
   }
 }
 
@@ -99,6 +92,8 @@ export async function saveWorkspace(req: Request, res: Response): Promise<void> 
     forwardingEnabled,
     webhookRelayUrl,
     emailForwardTo,
+    forwardTemplateName,
+    forwardTemplateLanguage,
   } = req.body as {
     businessLabel?: string;
     sourcePhoneNumber?: string;
@@ -111,28 +106,43 @@ export async function saveWorkspace(req: Request, res: Response): Promise<void> 
     forwardingEnabled?: boolean;
     webhookRelayUrl?: string;
     emailForwardTo?: string;
+    forwardTemplateName?: string;
+    forwardTemplateLanguage?: string;
   };
 
-  if (!businessLabel || !sourcePhoneNumber || !phoneNumberId || !forwardToNumber) {
+  if (!businessLabel?.trim() || !sourcePhoneNumber?.trim() || !phoneNumberId?.trim()) {
     res.status(400).json({
-      error: 'businessLabel, sourcePhoneNumber, phoneNumberId, and forwardToNumber are required',
+      error: 'businessLabel, sourcePhoneNumber, and phoneNumberId are required',
     });
     return;
   }
 
-  const existingWorkspace = getWorkspaceByUserId(req.auth.userId);
-  const isNewWorkspace = !existingWorkspace;
-  const tokenToValidate = accessToken?.trim();
+  const userId = req.auth.userId;
+  const existing = getWorkspaceRuntimeByUserId(userId);
+  const newToken = accessToken?.trim();
+  const cleanPhoneNumberId = phoneNumberId.trim();
 
-  if (isNewWorkspace && !tokenToValidate) {
+  if (!existing && !newToken) {
     res.status(400).json({ error: 'accessToken is required when creating a workspace.' });
     return;
   }
 
-  // Validate credentials against the Graph API when a token is provided
-  if (tokenToValidate) {
+  const owner = findPhoneNumberOwner(cleanPhoneNumberId);
+  if (owner && owner !== userId) {
+    res.status(409).json({
+      error: 'This WhatsApp number is already connected to another account.',
+    });
+    return;
+  }
+
+  // Re-check access whenever the token or the number changes.
+  const phoneChanged = existing?.phoneNumberId !== cleanPhoneNumberId;
+  if (newToken || phoneChanged) {
     try {
-      await validateWhatsappCredentials(phoneNumberId.trim(), tokenToValidate);
+      await validateWhatsappCredentials(
+        cleanPhoneNumberId,
+        newToken || (existing?.accessToken ?? ''),
+      );
     } catch (error) {
       res.status(400).json({ error: (error as Error).message });
       return;
@@ -140,22 +150,38 @@ export async function saveWorkspace(req: Request, res: Response): Promise<void> 
   }
 
   try {
-    const normalizedFilters = Array.isArray(keywordFilters)
-      ? keywordFilters
-      : typeof keywordFilters === 'string'
-        ? keywordFilters.split(',').map((value) => value.trim()).filter(Boolean)
-        : [];
+    const normalizedFilters = (
+      Array.isArray(keywordFilters)
+        ? keywordFilters
+        : typeof keywordFilters === 'string'
+          ? keywordFilters.split(',')
+          : []
+    )
+      .map((value) => String(value).trim())
+      .filter(Boolean);
 
+    const primary = forwardToNumber?.trim() ? normalizePhoneNumber(forwardToNumber) : '';
     const normalizedExtras = parseExtraRecipients(extraRecipients);
-    const validatedRelayUrl = validateOptionalUrl(webhookRelayUrl?.trim() ?? '', 'Webhook relay URL');
-    const validatedEmail = validateOptionalEmail(emailForwardTo?.trim() ?? '');
+    const relayUrl = webhookRelayUrl?.trim() ? await assertSafeOutboundUrl(webhookRelayUrl) : '';
+    const email = validateOptionalEmail(emailForwardTo?.trim() ?? '');
+    // No destinations is allowed: messages still reach the inbox, and the
+    // dashboard prompts the user to add one.
+    const enabled = forwardingEnabled ?? true;
 
-    const user = getUserById(req.auth.userId);
-    const userPlan = user?.plan ?? 'free';
-    const planError = validatePlanFeatures(userPlan, {
+    const templateName = forwardTemplateName?.trim();
+    if (templateName && !TEMPLATE_NAME_REGEX.test(templateName)) {
+      res.status(400).json({
+        error: 'Template names use lowercase letters, numbers and underscores only.',
+      });
+      return;
+    }
+
+    const user = getUserById(userId);
+    const planError = validatePlanFeatures(user?.plan ?? 'free', {
+      forwardToNumber: primary,
       extraRecipients: normalizedExtras,
-      webhookRelayUrl: validatedRelayUrl,
-      emailForwardTo: validatedEmail,
+      webhookRelayUrl: relayUrl,
+      emailForwardTo: email,
     });
     if (planError) {
       res.status(402).json({
@@ -166,19 +192,21 @@ export async function saveWorkspace(req: Request, res: Response): Promise<void> 
       return;
     }
 
-    const workspace = upsertWorkspace(req.auth.userId, {
+    const workspace = upsertWorkspace(userId, {
       businessLabel: businessLabel.trim(),
       sourcePhoneNumber: normalizePhoneNumber(sourcePhoneNumber),
-      phoneNumberId: phoneNumberId.trim(),
-      accessToken: tokenToValidate,
+      phoneNumberId: cleanPhoneNumberId,
+      accessToken: newToken,
       appSecret: appSecret?.trim(),
-      forwardToNumber: normalizePhoneNumber(forwardToNumber),
+      forwardToNumber: primary,
       extraRecipients: normalizedExtras,
       keywordFilters: normalizedFilters,
-      forwardingEnabled: forwardingEnabled ?? true,
-      webhookRelayUrl: validatedRelayUrl,
-      emailForwardTo: validatedEmail,
-      webhookBaseUrl: deriveWebhookBaseUrl(req),
+      forwardingEnabled: enabled,
+      webhookRelayUrl: relayUrl,
+      emailForwardTo: email,
+      forwardTemplateName: templateName,
+      forwardTemplateLanguage: forwardTemplateLanguage?.trim(),
+      webhookBaseUrl: deriveBaseUrl(req),
     });
 
     res.status(200).json({ workspace });

@@ -10,7 +10,10 @@ export interface MessageLog {
   status: 'success' | 'failed';
   error: string | null;
   forwarded_at: string;
+  channel: MessageChannel;
 }
+
+export type MessageChannel = 'whatsapp' | 'email' | 'webhook';
 
 export interface MessageLogInput {
   workspace_id?: string;
@@ -20,6 +23,8 @@ export interface MessageLogInput {
   type?: string;
   status: 'success' | 'failed';
   error?: string;
+  /** Where the copy went; defaults to 'whatsapp'. */
+  channel?: MessageChannel;
   /** ISO timestamp override; defaults to now. Used by the dev demo seeder. */
   forwarded_at?: string;
 }
@@ -30,8 +35,8 @@ export interface MessageLogInput {
 export function logMessage(input: MessageLogInput): void {
   const db = getDatabase();
   db.prepare(
-    `INSERT INTO message_logs (workspace_id, from_number, to_number, message, type, status, error, forwarded_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO message_logs (workspace_id, from_number, to_number, message, type, status, error, forwarded_at, channel)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     input.workspace_id ?? null,
     input.from_number,
@@ -41,6 +46,7 @@ export function logMessage(input: MessageLogInput): void {
     input.status,
     input.error ?? null,
     input.forwarded_at ?? new Date().toISOString(),
+    input.channel ?? 'whatsapp',
   );
 }
 
@@ -70,9 +76,7 @@ export function getWorkspaceMessageLogs(
  */
 export function getMessageLogCount(): number {
   const db = getDatabase();
-  const row = db
-    .prepare('SELECT COUNT(*) as count FROM message_logs')
-    .get() as { count: number };
+  const row = db.prepare('SELECT COUNT(*) as count FROM message_logs').get() as { count: number };
   return row.count;
 }
 

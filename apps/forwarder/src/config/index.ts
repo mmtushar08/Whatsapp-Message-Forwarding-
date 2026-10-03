@@ -49,8 +49,27 @@ const config = {
   /** Winston log level */
   logLevel: process.env['LOG_LEVEL'] ?? 'info',
 
-  /** WhatsApp App Secret (for webhook signature verification) — optional but recommended */
-  appSecret: process.env['WHATSAPP_APP_SECRET'] ?? '',
+  /**
+   * App secret used to verify webhook signatures. Meta signs every webhook
+   * with the secret of the app the WABA is subscribed to, which for Embedded
+   * Signup customers is the platform app — so fall back to META_APP_SECRET.
+   */
+  appSecret: process.env['WHATSAPP_APP_SECRET'] || process.env['META_APP_SECRET'] || '',
+
+  /** Platform Meta app ID (Embedded Signup code exchange) */
+  metaAppId: process.env['META_APP_ID'] ?? '',
+
+  /** Platform Meta app secret (Embedded Signup code exchange) — server only */
+  metaAppSecret: process.env['META_APP_SECRET'] ?? '',
+
+  /** Graph API version used for every Meta call */
+  graphApiVersion: process.env['META_GRAPH_API_VERSION'] || 'v25.0',
+
+  /** Graph API host — overridable so tests and local runs can target a mock */
+  graphApiBaseUrl: (process.env['META_GRAPH_API_BASE_URL'] || 'https://graph.facebook.com').replace(
+    /\/$/,
+    '',
+  ),
 
   /** Comma-separated list of phone numbers to forward messages to */
   forwardToNumbers: (process.env['FORWARD_TO_NUMBERS'] ?? '')

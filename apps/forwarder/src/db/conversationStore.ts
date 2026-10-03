@@ -131,6 +131,16 @@ export function getConversations(workspaceId: string): ConversationSummary[] {
   });
 }
 
+export function countInboundMessages(workspaceId: string): number {
+  const row = getDatabase()
+    .prepare(
+      `SELECT COUNT(*) AS count FROM conversation_messages
+       WHERE workspace_id = ? AND direction = 'in'`,
+    )
+    .get(workspaceId) as { count: number };
+  return row.count;
+}
+
 export function getLastInboundAt(workspaceId: string, contactNumber: string): string | null {
   const db = getDatabase();
   const row = db

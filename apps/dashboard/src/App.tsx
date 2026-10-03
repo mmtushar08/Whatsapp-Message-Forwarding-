@@ -31,9 +31,9 @@ function ProtectedAppShell() {
   if (!currentUser) return <Navigate to="/login" replace />;
 
   return (
-    <div className="flex min-h-screen bg-[#F4F7F4]">
+    <div className="flex flex-col md:flex-row min-h-screen bg-[#F4F7F4]">
       <Sidebar />
-      <main className="flex-1 p-7 overflow-auto">
+      <main className="flex-1 min-w-0 p-4 md:p-7 overflow-auto">
         <Outlet />
       </main>
     </div>

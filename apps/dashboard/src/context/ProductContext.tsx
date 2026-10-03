@@ -7,25 +7,30 @@ import {
   useState,
 } from 'react';
 import {
+  completeEmbeddedSignup,
+  connectWithAccessToken,
+  fetchWorkspace,
   fetchWorkspaceMessages,
   fetchWorkspaceStats,
   getCurrentSession,
   loginAccount,
   logoutAccount,
   metaLoginAccount,
-  saveEmbeddedSignupCredentials,
   saveWorkspaceRequest,
   signupAccount,
 } from '../api/client';
+import type { EmbeddedSignupResult } from '../lib/embeddedSignup';
 import type {
+  ManualConnectionInput,
   MessageStats,
   MarketplaceUser,
   Pagination,
   PrototypeMessageLog,
   WorkspaceSetup,
   WorkspaceSettingsInput,
-  EmbeddedSignupCredentials,
 } from '../types';
+
+type ConnectResult = { ok: true; workspace: WorkspaceSetup } | { ok: false; error: string };
 
 interface ProductContextValue {
   bootstrapping: boolean;
@@ -43,18 +48,17 @@ interface ProductContextValue {
     email: string,
     password: string,
   ) => Promise<{ ok: true } | { ok: false; error: string }>;
-  metaLogin: (params: {
-    accessToken: string;
-    phoneNumberId: string;
-    wabaId: string;
-  }) => Promise<{ ok: true; isNewUser: boolean } | { ok: false; error: string }>;
+  metaLogin: (
+    params: EmbeddedSignupResult,
+  ) => Promise<{ ok: true; isNewUser: boolean } | { ok: false; error: string }>;
   logout: () => Promise<void>;
   saveWorkspace: (
     input: WorkspaceSettingsInput,
   ) => Promise<{ ok: true } | { ok: false; error: string }>;
-  saveEmbeddedSignup: (
-    input: EmbeddedSignupCredentials,
-  ) => Promise<{ ok: true } | { ok: false; error: string }>;
+  /** Finishes Meta Embedded Signup for the signed-in user. */
+  connectWithMeta: (input: EmbeddedSignupResult & { businessLabel?: string }) => Promise<ConnectResult>;
+  /** Connects a number from a pasted access token. */
+  connectWithToken: (input: ManualConnectionInput) => Promise<ConnectResult>;
   refreshWorkspaceData: () => Promise<void>;
 }
 
@@ -69,6 +73,11 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   const [pagination, setPagination] = useState<Pagination | null>(null);
 
   async function loadWorkspaceData(): Promise<void> {
+    // Connection status changes server-side (Meta verifying the webhook), so
+    // refresh the workspace too; a failed fetch keeps what we have.
+    void fetchWorkspace()
+      .then(setWorkspace)
+      .catch(() => undefined);
     try {
       const [messagePayload, statsPayload] = await Promise.all([
         fetchWorkspaceMessages(),
@@ -175,14 +184,22 @@ export function ProductProvider({ children }: { children: ReactNode }) {
           return { ok: false, error: (error as Error).message };
         }
       },
-      async saveEmbeddedSignup(input) {
+      async connectWithMeta(input) {
         try {
-          const result = await saveEmbeddedSignupCredentials(input);
+          const result = await completeEmbeddedSignup(input);
           setWorkspace(result.workspace);
-          setMessages([]);
-          setPagination(null);
-          setStats({ total: 0, success: 0, failed: 0 });
-          return { ok: true };
+          await loadWorkspaceData();
+          return { ok: true, workspace: result.workspace };
+        } catch (error) {
+          return { ok: false, error: (error as Error).message };
+        }
+      },
+      async connectWithToken(input) {
+        try {
+          const result = await connectWithAccessToken(input);
+          setWorkspace(result.workspace);
+          await loadWorkspaceData();
+          return { ok: true, workspace: result.workspace };
         } catch (error) {
           return { ok: false, error: (error as Error).message };
         }

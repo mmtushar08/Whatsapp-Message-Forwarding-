@@ -14,7 +14,12 @@ jest.mock('../db/database', () => {
 
 // Import after mocking
 import { applySchema } from '../db/database';
-import { getMessageLogCount, getMessageLogs, getMessageStats, logMessage } from '../db/messageStore';
+import {
+  getMessageLogCount,
+  getMessageLogs,
+  getMessageStats,
+  logMessage,
+} from '../db/messageStore';
 
 beforeEach(() => {
   testDb = new BetterSqlite3(':memory:');
@@ -49,9 +54,10 @@ describe('logMessage', () => {
       error: 'API timeout',
     });
 
-    const rows = testDb
-      .prepare('SELECT * FROM message_logs')
-      .all() as { status: string; error: string | null }[];
+    const rows = testDb.prepare('SELECT * FROM message_logs').all() as {
+      status: string;
+      error: string | null;
+    }[];
     expect(rows).toHaveLength(1);
     expect(rows[0].status).toBe('failed');
     expect(rows[0].error).toBe('API timeout');

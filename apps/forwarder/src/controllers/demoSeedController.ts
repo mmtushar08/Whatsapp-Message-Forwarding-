@@ -74,7 +74,11 @@ const SEED_CONVERSATIONS: SeedConversation[] = [
     messages: [
       { dir: 'in', text: 'Hi, is the 2BHK on SG Highway still available?', agoMs: 5 * HOUR },
       { dir: 'in', text: "Also what's the carpet area?", agoMs: 4.8 * HOUR },
-      { dir: 'out', text: 'Yes, available! Carpet area is 1,180 sq ft. Want to book a site visit?', agoMs: 4.5 * HOUR },
+      {
+        dir: 'out',
+        text: 'Yes, available! Carpet area is 1,180 sq ft. Want to book a site visit?',
+        agoMs: 4.5 * HOUR,
+      },
     ],
   },
   {
@@ -82,7 +86,11 @@ const SEED_CONVERSATIONS: SeedConversation[] = [
     name: 'Sneha Patel',
     messages: [
       { dir: 'in', text: 'Please share brochure for Skyline Towers', agoMs: 18 * HOUR },
-      { dir: 'out', text: 'Sure Sneha — sending the brochure PDF right here. 📄 skyline-towers.pdf', agoMs: 17.5 * HOUR },
+      {
+        dir: 'out',
+        text: 'Sure Sneha — sending the brochure PDF right here. 📄 skyline-towers.pdf',
+        agoMs: 17.5 * HOUR,
+      },
       { dir: 'in', text: 'Got it, thanks! What about EMI options?', agoMs: 17 * HOUR },
     ],
   },
@@ -91,7 +99,11 @@ const SEED_CONVERSATIONS: SeedConversation[] = [
     name: 'Amit Shah',
     messages: [
       { dir: 'in', text: 'Cancel my appointment please', agoMs: 72 * HOUR },
-      { dir: 'out', text: 'Done, your Tuesday appointment is cancelled. We can reschedule anytime.', agoMs: 71.8 * HOUR },
+      {
+        dir: 'out',
+        text: 'Done, your Tuesday appointment is cancelled. We can reschedule anytime.',
+        agoMs: 71.8 * HOUR,
+      },
     ],
   },
 ];

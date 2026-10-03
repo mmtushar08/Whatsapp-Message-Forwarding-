@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { seedDemoData } from '../api/client';
 import { useProduct } from '../context/ProductContext';
+import { useLiveRefresh } from '../lib/useLiveRefresh';
+import { formatDestination, formatPhone } from '../lib/workspace';
 
 type BadgeColor = 'green' | 'red';
 const BADGE: Record<BadgeColor, { bg: string; color: string }> = {
@@ -11,6 +13,7 @@ const BADGE: Record<BadgeColor, { bg: string; color: string }> = {
 export default function Messages() {
   const { workspace, messages, pagination, refreshWorkspaceData } = useProduct();
   const [seeding, setSeeding] = useState(false);
+  useLiveRefresh(refreshWorkspaceData, { enabled: Boolean(workspace) });
 
   async function handleSeed() {
     setSeeding(true);
@@ -83,10 +86,10 @@ export default function Messages() {
                       {new Date(row.forwardedAt).toLocaleString()}
                     </td>
                     <td className="font-mono px-4 py-3 whitespace-nowrap" style={{ color: '#5C6B63', borderBottom: '1px solid #EDF1EE' }}>
-                      +{row.from}
+                      {formatPhone(row.from)}
                     </td>
                     <td className="font-mono px-4 py-3 whitespace-nowrap" style={{ color: '#5C6B63', borderBottom: '1px solid #EDF1EE' }}>
-                      +{row.to}
+                      {formatDestination(row.channel, row.to)}
                     </td>
                     <td className="px-4 py-3 max-w-[260px]" style={{ color: '#14201B', borderBottom: '1px solid #EDF1EE' }}>
                       <div className="truncate">{row.message}</div>

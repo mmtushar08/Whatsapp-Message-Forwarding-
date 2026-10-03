@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useProduct } from '../context/ProductContext';
+import { formatPhone, hasDestination, workspaceToSettingsInput } from '../lib/workspace';
 
 interface DerivedRule {
   key: string;
@@ -48,14 +49,14 @@ export default function Rules() {
   const filterLabel = workspace.keywordFilters.length > 0
     ? `Contains "${workspace.keywordFilters.join(', ')}"`
     : 'All messages';
-  const sourceLabel = workspace.sourcePhoneNumber || workspace.phoneNumberId;
+  const sourceLabel = formatPhone(workspace.sourcePhoneNumber) || workspace.phoneNumberId;
 
   const rules: DerivedRule[] = [];
   if (workspace.forwardToNumber) {
     rules.push({
       key: 'primary',
       filter: filterLabel,
-      dest: `📱 +${workspace.forwardToNumber}`,
+      dest: `📱 ${formatPhone(workspace.forwardToNumber)}`,
       note: `From ${sourceLabel} · primary destination`,
     });
   }
@@ -63,14 +64,14 @@ export default function Rules() {
     rules.push({
       key: `extra-${i}`,
       filter: filterLabel,
-      dest: `📱 +${number}`,
+      dest: `📱 ${formatPhone(number)}`,
       note: `From ${sourceLabel} · fan-out destination`,
     });
   });
   if (workspace.webhookRelayUrl) {
     rules.push({
       key: 'webhook',
-      filter: 'All messages',
+      filter: filterLabel,
       dest: `⚙️ POST ${workspace.webhookRelayUrl}`,
       note: `From ${sourceLabel} · JSON payload`,
     });
@@ -78,31 +79,21 @@ export default function Rules() {
   if (workspace.emailForwardTo) {
     rules.push({
       key: 'email',
-      filter: 'All messages',
+      filter: filterLabel,
       dest: `✉️ ${workspace.emailForwardTo}`,
       note: `From ${sourceLabel} · email copy`,
     });
   }
 
-  const setupIncomplete = !workspace.sourcePhoneNumber || !workspace.forwardToNumber;
+  const setupIncomplete = !hasDestination(workspace);
 
   async function handleToggle() {
     if (!workspace) return;
     setToggling(true);
     setError(null);
-    const result = await saveWorkspace({
-      businessLabel: workspace.businessLabel,
-      sourcePhoneNumber: workspace.sourcePhoneNumber,
-      phoneNumberId: workspace.phoneNumberId,
-      accessToken: '',
-      appSecret: '',
-      forwardToNumber: workspace.forwardToNumber,
-      extraRecipients: workspace.extraRecipients,
-      keywordFilters: workspace.keywordFilters.join(', '),
-      forwardingEnabled: !workspace.forwardingEnabled,
-      webhookRelayUrl: workspace.webhookRelayUrl,
-      emailForwardTo: workspace.emailForwardTo,
-    });
+    const result = await saveWorkspace(
+      workspaceToSettingsInput(workspace, { forwardingEnabled: !workspace.forwardingEnabled }),
+    );
     setToggling(false);
     if (!result.ok) setError(result.error);
   }
@@ -133,7 +124,7 @@ export default function Rules() {
         <div className="bg-white rounded-[14px] p-8 text-center" style={{ border: '2px dashed #DCE4DF' }}>
           <p className="font-semibold mb-1" style={{ color: '#14201B' }}>Almost there</p>
           <p className="text-sm mb-5" style={{ color: '#5C6B63' }}>
-            Add your source number and a forwarding destination in Settings to activate your first rule.
+            Add a forwarding destination — a WhatsApp number, email or webhook — to activate your first rule.
           </p>
           <Link to="/app/settings" className="inline-block rounded-[11px] px-6 py-3 text-sm font-semibold text-white no-underline" style={{ background: '#1FAB5E' }}>
             Complete setup →
