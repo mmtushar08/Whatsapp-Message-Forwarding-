@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { seedDemoData } from '../api/client';
 import { SetupWarnings } from '../components/ConnectionNotices';
 import { useProduct } from '../context/ProductContext';
+import { useLiveRefresh } from '../lib/useLiveRefresh';
 import { formatDestination, formatPhone, hasDestination } from '../lib/workspace';
 
 function StatCard({ label, value, detail }: { label: string; value: string; detail: string }) {
@@ -24,6 +25,7 @@ const BADGE: Record<BadgeColor, { bg: string; color: string }> = {
 export default function Dashboard() {
   const { currentUser, workspace, stats, messages, refreshWorkspaceData } = useProduct();
   const [seeding, setSeeding] = useState(false);
+  useLiveRefresh(refreshWorkspaceData, { enabled: Boolean(workspace) });
 
   if (!workspace) {
     return (
@@ -153,16 +155,16 @@ export default function Dashboard() {
                 <span className="font-mono text-[11.5px] w-12 shrink-0" style={{ color: '#5C6B63' }}>
                   {new Date(item.forwardedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
-                <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                  <div className="rounded-[14px_14px_14px_4px] px-3 py-2 text-sm max-w-[220px] truncate"
+                <div className="flex items-center gap-2.5 flex-1 min-w-0 basis-full sm:basis-auto">
+                  <div className="rounded-[14px_14px_14px_4px] px-3 py-2 text-sm flex-1 sm:flex-none min-w-0 sm:max-w-[220px] truncate"
                     style={{ background: '#E4F6EC', border: '1px solid #BFE7D1' }}>
                     {item.message}
                   </div>
-                  <div className="flex-1 h-0.5 relative"
+                  <div className="hidden sm:block flex-1 h-0.5 relative"
                     style={{ backgroundImage: 'linear-gradient(90deg,#1FAB5E 55%,transparent 0)', backgroundSize: '9px 2px', minWidth: 36 }}>
                     <div className="absolute right-0 top-1/2 -translate-y-1/2 border-[5px] border-transparent border-l-[#1FAB5E]" />
                   </div>
-                  <div className="rounded-[10px] px-3 py-1.5 text-xs font-semibold whitespace-nowrap shrink-0 font-mono"
+                  <div className="rounded-[10px] px-3 py-1.5 text-xs font-semibold whitespace-nowrap shrink-0 font-mono max-w-[50%] truncate"
                     style={{ border: '1.5px solid #DCE4DF' }}>
                     {formatDestination(item.channel, item.to)}
                   </div>

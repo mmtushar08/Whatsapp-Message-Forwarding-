@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { SetupWarnings, WebhookDetails } from '../components/ConnectionNotices';
 import { useProduct } from '../context/ProductContext';
+import { useLiveRefresh } from '../lib/useLiveRefresh';
 import { formatPhone, timeAgo } from '../lib/workspace';
 
 export default function Numbers() {
-  const { workspace } = useProduct();
+  const { workspace, refreshWorkspaceData } = useProduct();
   const [showPin, setShowPin] = useState(false);
+  useLiveRefresh(refreshWorkspaceData, { enabled: Boolean(workspace) });
 
   return (
     <div className="max-w-4xl space-y-6">

@@ -12,6 +12,7 @@ import {
   sendConversationTemplate,
 } from '../api/client';
 import { useProduct } from '../context/ProductContext';
+import { useLiveRefresh } from '../lib/useLiveRefresh';
 
 function initials(name: string, fallback: string): string {
   if (name) return name.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
@@ -82,9 +83,20 @@ export default function Inbox() {
     }
   }, []);
 
+  // Poll for new messages without disturbing an open template picker.
+  useLiveRefresh(async () => {
+    await loadConversations();
+    const contact = selectedRef.current;
+    if (!contact) return;
+    const data = await fetchThread(contact).catch(() => null);
+    if (data && selectedRef.current === contact) {
+      setMessages(data.messages);
+      setSession(data.session);
+    }
+  }, { enabled: Boolean(workspace) });
+
   useEffect(() => {
     if (!workspace) { setLoading(false); return; }
-    void loadConversations();
     fetchTemplates()
       .then((t) => { setTemplates(t.templates); setTemplateError(null); })
       .catch((e: Error) => { setTemplates([]); setTemplateError(e.message); });
@@ -177,9 +189,9 @@ export default function Inbox() {
           </p>
         </div>
       ) : (
-        <div className="flex rounded-[14px] overflow-hidden bg-white" style={{ border: '1px solid #DCE4DF', boxShadow: '0 8px 30px rgba(14,59,46,.10)', height: 'calc(100vh - 230px)', minHeight: 500 }}>
+        <div className="flex flex-col md:flex-row rounded-[14px] overflow-hidden bg-white" style={{ border: '1px solid #DCE4DF', boxShadow: '0 8px 30px rgba(14,59,46,.10)', height: 'calc(100vh - 230px)', minHeight: 500 }}>
           {/* Conversations list */}
-          <div className="w-[288px] shrink-0 overflow-y-auto" style={{ borderRight: '1px solid #DCE4DF', background: '#FAFCFA' }}>
+          <div className="w-full md:w-[288px] max-h-[170px] md:max-h-none shrink-0 overflow-y-auto border-b md:border-b-0 md:border-r border-[#DCE4DF]" style={{ background: '#FAFCFA' }}>
             {conversations.map((c) => {
               const active = c.contactNumber === selected;
               return (

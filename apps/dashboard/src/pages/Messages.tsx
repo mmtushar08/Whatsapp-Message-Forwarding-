@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { seedDemoData } from '../api/client';
 import { useProduct } from '../context/ProductContext';
+import { useLiveRefresh } from '../lib/useLiveRefresh';
 import { formatDestination, formatPhone } from '../lib/workspace';
 
 type BadgeColor = 'green' | 'red';
@@ -12,6 +13,7 @@ const BADGE: Record<BadgeColor, { bg: string; color: string }> = {
 export default function Messages() {
   const { workspace, messages, pagination, refreshWorkspaceData } = useProduct();
   const [seeding, setSeeding] = useState(false);
+  useLiveRefresh(refreshWorkspaceData, { enabled: Boolean(workspace) });
 
   async function handleSeed() {
     setSeeding(true);

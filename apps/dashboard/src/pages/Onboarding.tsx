@@ -9,6 +9,7 @@ import {
   loadFacebookSdk,
   runEmbeddedSignup,
 } from '../lib/embeddedSignup';
+import { useLiveRefresh } from '../lib/useLiveRefresh';
 import { formatPhone, hasDestination, workspaceToSettingsInput } from '../lib/workspace';
 import { PLAN_CAPABILITIES } from '../types';
 
@@ -145,7 +146,8 @@ const DEST_OPTS: Array<{
 
 export default function Onboarding() {
   const navigate = useNavigate();
-  const { currentUser, workspace, connectWithMeta, connectWithToken, saveWorkspace } = useProduct();
+  const { currentUser, workspace, connectWithMeta, connectWithToken, saveWorkspace, refreshWorkspaceData } =
+    useProduct();
   const caps = PLAN_CAPABILITIES[currentUser?.plan ?? 'free'];
   const metaConfigured = isEmbeddedSignupConfigured();
 
@@ -182,6 +184,12 @@ export default function Onboarding() {
   useEffect(() => {
     if (metaConfigured) loadFacebookSdk().catch(() => undefined);
   }, [metaConfigured]);
+
+  // On the last step, notice as soon as Meta verifies the customer's webhook.
+  useLiveRefresh(refreshWorkspaceData, {
+    enabled: step === 4 && workspace?.status === 'needs_webhook_setup',
+    intervalMs: 5_000,
+  });
 
   const showConnectedCard = Boolean(workspace) && !replacing;
   const label = bizName.trim() || undefined;

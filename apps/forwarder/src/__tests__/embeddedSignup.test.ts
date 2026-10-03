@@ -84,6 +84,11 @@ describe('POST /api/complete-embedded-signup', () => {
     expect(workspace.forwardTemplateName).toBe('forward_alert');
     expect(workspace.setupWarnings).toEqual([]);
     expect(calls.posts).toContain(`${account.wabaId}/subscribed_apps`);
+    // Sent with no payload — a JSON `null` body is rejected by strict parsers.
+    const subscribe = mockedAxios.post.mock.calls.find((c) =>
+      String(c[0]).endsWith('/subscribed_apps'),
+    );
+    expect(subscribe?.[1]).toBeUndefined();
     expect(calls.posts).toContain(`${account.wabaId}/message_templates`);
     // Already on the Cloud API — no re-registration (it would reset the PIN).
     expect(calls.posts).not.toContain(`${account.phoneNumberId}/register`);

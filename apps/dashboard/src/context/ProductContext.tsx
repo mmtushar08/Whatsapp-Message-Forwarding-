@@ -9,6 +9,7 @@ import {
 import {
   completeEmbeddedSignup,
   connectWithAccessToken,
+  fetchWorkspace,
   fetchWorkspaceMessages,
   fetchWorkspaceStats,
   getCurrentSession,
@@ -72,6 +73,11 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   const [pagination, setPagination] = useState<Pagination | null>(null);
 
   async function loadWorkspaceData(): Promise<void> {
+    // Connection status changes server-side (Meta verifying the webhook), so
+    // refresh the workspace too; a failed fetch keeps what we have.
+    void fetchWorkspace()
+      .then(setWorkspace)
+      .catch(() => undefined);
     try {
       const [messagePayload, statsPayload] = await Promise.all([
         fetchWorkspaceMessages(),

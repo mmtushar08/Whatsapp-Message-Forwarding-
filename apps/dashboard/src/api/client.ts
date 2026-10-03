@@ -257,6 +257,11 @@ export async function fetchWorkspaceMessages(
   };
 }
 
+export async function fetchWorkspace(): Promise<WorkspaceSetup> {
+  const payload = await request<{ workspace: WorkspaceSetup }>('/app/workspace', { method: 'GET' }, true);
+  return payload.workspace;
+}
+
 export async function fetchWorkspaceStats(): Promise<MessageStats> {
   return request<MessageStats>('/app/messages/stats', { method: 'GET' }, true);
 }

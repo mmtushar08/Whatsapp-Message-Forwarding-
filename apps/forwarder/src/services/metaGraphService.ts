@@ -80,8 +80,12 @@ async function graphGet<T>(
 }
 
 async function graphPost<T>(path: string, accessToken: string, body?: unknown): Promise<T> {
-  const response = await axios.post<T>(graphUrl(path), body ?? null, {
-    headers: { ...authHeaders(accessToken), 'Content-Type': 'application/json' },
+  // No body means no payload at all — a literal JSON `null` is rejected.
+  const response = await axios.post<T>(graphUrl(path), body, {
+    headers:
+      body === undefined
+        ? authHeaders(accessToken)
+        : { ...authHeaders(accessToken), 'Content-Type': 'application/json' },
     timeout: TIMEOUT_MS,
   });
   return response.data;
