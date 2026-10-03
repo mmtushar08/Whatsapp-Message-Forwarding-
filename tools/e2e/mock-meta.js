@@ -26,7 +26,7 @@ function reset() {
     subscribed: new Set(),
     registered: {},
     templates: Object.fromEntries(Object.values(accounts).map((a) => [a.wabaId, [
-      { name: 'hello_world', language: 'en', status: 'APPROVED', category: 'UTILITY',
+      { name: 'hello_world', language: 'en_US', status: 'APPROVED', category: 'UTILITY',
         components: [{ type: 'BODY', text: 'Hello from us!' }] },
       { name: 'follow_up', language: 'en', status: 'APPROVED', category: 'UTILITY',
         components: [{ type: 'BODY', text: 'Hi {{1}}, following up about {{2}}.' }] },
