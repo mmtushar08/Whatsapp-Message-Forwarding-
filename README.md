@@ -357,6 +357,14 @@ npm run test:watch
 npm run test:coverage
 ```
 
+### End-to-end
+
+`tools/e2e/run.sh` builds both apps, starts them in production mode against a
+mock Meta Graph API, and drives every user flow in Chromium — signup, Meta
+connect, forwarding (with the 24h template fallback), inbox, settings, billing,
+Meta login, multi-tenant routing and security checks. See
+[tools/e2e/README.md](tools/e2e/README.md).
+
 Test files live under `apps/forwarder/src/__tests__/` and cover:
 
 | Test File | What it Tests |
